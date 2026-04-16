@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply launchpad mkectl
+.PHONY: init plan apply destroy launchpad mkectl
 
 init:
 	terraform init
@@ -10,6 +10,9 @@ plan:
 
 apply:
 	terraform apply -auto-approve
+
+destroy:
+	terraform destroy
 
 launchpad:
 	launchpad apply -c artifacts/configs/launchpad.yaml
