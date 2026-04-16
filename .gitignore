@@ -1,0 +1,31 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.crash
+.terraform/
+.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Local Terraform variables and credentials
+terraform.tfvars
+*.tfvars
+credentials/
+
+# Sensitive files
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+
+# Local artifacts and generated files
+artifacts/
+*.log
+*.bak
+*.swp
+.DS_Store

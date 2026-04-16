@@ -1,0 +1,182 @@
+apiVersion: ${apiVersion}
+kind: ${kind}
+metadata:
+  creationTimestamp: null
+  name: mke
+  namespace: ${namespace}
+spec:
+  airgap:
+    enabled: false
+  apiServer:
+    externalAddress: ${api_server.external_address}
+    sans:
+%{ for san in api_server.sans ~}
+      - ${san}
+%{ endfor ~}
+    audit:
+      enabled: false
+      level: Metadata
+      logPath: /var/log/mke4/audit/audit.log
+      maxAge: 30
+      maxBackup: 10
+      maxSize: 10
+      policyFile: /etc/audit_policy.yaml
+    encryptionProvider: /var/lib/k0s/encryption.cfg
+    eventRateLimit:
+      enabled: false
+    requestTimeout: 1m0s
+  authentication:
+    expiry: {}
+    ldap:
+      enabled: false
+    oidc:
+      enabled: false
+    replicaCount: 1
+    saml:
+      enabled: false
+  backup:
+    enabled: true
+    scheduled_backup:
+      enabled: false
+    storage_provider:
+      external_options: {}
+      in_cluster_options:
+        admin_credentials_secret: minio-credentials
+        enable_ui: true
+      type: InCluster
+  cloudProvider:
+    enabled: false
+    provider: ${cloud_provider}
+  controllerManager:
+    terminatedPodGCThreshold: 12500
+  devicePlugins:
+    nvidiaGPU:
+      enabled: false
+      mig: {}
+  dns:
+    lameduck: {}
+  etcd: {}
+  hosts:
+%{ for host in hosts ~}
+  - role: ${host.role}
+    ssh:
+      address: ${host.ssh.address}
+      keyPath: ${host.ssh.keyPath}
+      port: ${host.ssh.port}
+      user: ${host.ssh.user}
+    privateInterface: ${host.privateInterface}
+%{ endfor ~}
+  ingressController:
+    affinity:
+      nodeAffinity: {}
+    enabled: true
+    extraArgs:
+      enableSslPassthrough: false
+      httpPort: 80
+      httpsPort: 443
+    nodePorts:
+      http: 33000
+      https: 33001
+    ports: {}
+    replicaCount: 2
+  k0rdent:
+    enabled: true
+    providers:
+      - name: cluster-api-provider-aws
+      - name: cluster-api-provider-k0sproject-k0smotron
+  k8sProviderSpecs:
+    dataDir: /var/lib/k0s
+  kubelet:
+    eventRecordQPS: 50
+    kubeletRootDir: /var/lib/kubelet
+    managerKubeReserved:
+      cpu: 250m
+      ephemeral-storage: 4Gi
+      memory: 2Gi
+    maxPods: 110
+    podPidsLimit: -1
+    podsPerCore: 0
+    protectKernelDefaults: false
+    seccompDefault: false
+    workerKubeReserved:
+      cpu: 50m
+      ephemeral-storage: 500Mi
+      memory: 300Mi
+  license:
+    token: ""
+  monitoring:
+    enableCAdvisor: true
+    enableGrafana: true
+    grafana:
+      ingress:
+        enabled: true
+    prometheus: {}
+  network:
+    cplb:
+      disabled: true
+    kubeProxy:
+      iptables:
+        minSyncPeriod: 0s
+        syncPeriod: 0s
+      ipvs:
+        minSyncPeriod: 0s
+        syncPeriod: 0s
+        tcpFinTimeout: 0s
+        tcpTimeout: 0s
+        udpTimeout: 0s
+      metricsBindAddress: 0.0.0.0:10249
+      mode: iptables
+      nftables:
+        minSyncPeriod: 0s
+        syncPeriod: 0s
+    multus:
+      enabled: false
+    nllb:
+      disabled: true
+    nodePortRange: 32768-35535
+    providers:
+      - enabled: true
+        extraConfig:
+          cidrV4: 192.168.0.0/16
+          linuxDataplane: Iptables
+          loglevel: Info
+        provider: calico
+      - enabled: false
+        provider: custom
+      - enabled: false
+        extraConfig:
+          cidrV4: 192.168.0.0/16
+          v: "5"
+        provider: kuberouter
+    serviceCIDR: 10.96.0.0/16
+  policyController:
+    opaGatekeeper:
+      enabled: false
+  registries:
+    chartRegistry:
+      url: oci://registry.mirantis.com/mke
+    imageRegistry:
+      url: registry.mirantis.com/mke
+  scheduler: {}
+  tracking:
+    enabled: true
+  version: ${version}
+  addons:
+    - chart:
+        name: metallb
+        repo: https://metallb.github.io/metallb
+        values: |
+          controller:
+            tolerations:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+                effect: NoSchedule
+          speaker:
+            frr:
+              enabled: false
+        version: 0.14.7
+      dryRun: false
+      enabled: true
+      kind: chart
+      name: metallb
+      namespace: metallb-system

@@ -1,0 +1,60 @@
+apiVersion: ${apiVersion}
+kind: ${kind}
+metadata:
+  name: ${cluster_name}
+spec:
+  hosts:
+%{ for host in managers ~}
+    - role: manager
+      ssh:
+        address: ${host.public_ip}
+        user: ${host.ssh_user}
+        port: ${host.ssh_port}
+        keyPath: ${host.ssh_key_path}
+      privateInterface: ${host.private_interface}
+%{ endfor ~}
+%{ for host in msrs ~}
+    - role: msr
+      ssh:
+        address: ${host.public_ip}
+        user: ${host.ssh_user}
+        port: ${host.ssh_port}
+        keyPath: ${host.ssh_key_path}
+      privateInterface: ${host.private_interface}
+%{ endfor ~}
+%{ for host in workers ~}
+    - role: worker
+      ssh:
+        address: ${host.public_ip}
+        user: ${host.ssh_user}
+        port: ${host.ssh_port}
+        keyPath: ${host.ssh_key_path}
+      privateInterface: ${host.private_interface}
+%{ endfor ~}
+  mke:
+    version: ${mke_version}
+    adminUsername: ${admin_username}
+    adminPassword: ${admin_password}
+    installFlags:
+      - ${orchestrator_flag}
+      - --force-minimums
+%{ if san != null ~}
+      - --san=${san}
+%{ endif ~}
+  msr:
+%{ if enable_msr ~}
+    version: ${msr_version}
+    installFlags:
+      - --ucp-insecure-tls
+%{ if msr_external_url != null ~}
+      - --dtr-external-url ${msr_external_url}
+%{ endif ~}
+%{ else ~}
+    {}
+%{ endif ~}
+  mcr:
+    version: ${mcr_version}
+    channel: stable
+    repoURL: https://repos.mirantis.com
+  cluster:
+    prune: true

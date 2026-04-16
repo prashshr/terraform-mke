@@ -1,0 +1,160 @@
+locals {
+  cluster_name = var.cluster_name
+
+  provider_defaults = {
+    aws = {
+      enabled                 = false
+      region                  = "eu-west-1"
+      profile                 = ""
+      shared_credentials_file = "credentials/aws-profile"
+      resource_prefix         = var.cluster_name
+      cluster_name            = var.cluster_name
+      vpc_cidr                = "10.40.0.0/16"
+      availability_zones      = ["eu-west-1a", "eu-west-1b"]
+      ssh_key_prefix          = var.cluster_name
+      node_pools              = []
+      tags                    = {}
+    }
+    hetzner = {
+      enabled          = false
+      location         = "hel1"
+      network          = null
+      create_network   = false
+      network_cidr     = "10.42.0.0/16"
+      subnet_cidr      = "10.42.0.0/24"
+      network_zone     = "eu-central"
+      dns_source_ips   = []
+      cluster_name     = var.cluster_name
+      ssh_key_prefix   = var.cluster_name
+      node_pools       = []
+      labels           = {}
+      token            = null
+      credentials_file = null
+    }
+    cloudflare = {
+      enabled     = false
+      zone_id     = ""
+      record_name = var.cluster_name
+      api_token   = null
+    }
+    azure = {
+      enabled            = false
+      location           = "westeurope"
+      subscription_id    = ""
+      tenant_id          = ""
+      client_id          = ""
+      client_secret      = ""
+      environment        = "AzurePublicCloud"
+      credentials_file   = ""
+      resource_group     = "${var.cluster_name}-rg"
+      vnet_cidr          = "10.60.0.0/16"
+      subnet_cidr        = "10.60.10.0/24"
+      ssh_key_prefix     = var.cluster_name
+      node_pools         = []
+      availability_zones = []
+      tags               = {}
+    }
+    vsphere = {
+      enabled        = false
+      server         = ""
+      user           = ""
+      password       = ""
+      password_file  = ""
+      datacenter     = ""
+      datastore      = ""
+      cluster        = ""
+      network        = ""
+      folder         = "/${var.cluster_name}"
+      ssh_key_prefix = var.cluster_name
+      template_map   = {}
+      node_pools     = []
+    }
+  }
+
+  aws_settings_override = {
+    for k, v in var.aws_settings : k => v if v != null
+  }
+  hetzner_settings_override = {
+    for k, v in var.hetzner_settings : k => v if v != null
+  }
+  cloudflare_settings_override = {
+    for k, v in var.cloudflare_settings : k => v if v != null
+  }
+  azure_settings_override = {
+    for k, v in var.azure_settings : k => v if v != null
+  }
+  vsphere_settings_override = {
+    for k, v in var.vsphere_settings : k => v if v != null
+  }
+
+  aws_settings_map        = merge(local.provider_defaults.aws, local.aws_settings_override)
+  hetzner_settings_map    = merge(local.provider_defaults.hetzner, local.hetzner_settings_override)
+  cloudflare_settings_map = merge(local.provider_defaults.cloudflare, local.cloudflare_settings_override)
+  azure_settings_map      = merge(local.provider_defaults.azure, local.azure_settings_override)
+  vsphere_settings_map    = merge(local.provider_defaults.vsphere, local.vsphere_settings_override)
+
+  aws_enabled        = try(local.aws_settings_map.enabled, false) && length(try(local.aws_settings_map.node_pools, [])) > 0
+  hetzner_enabled    = try(local.hetzner_settings_map.enabled, false) && length(try(local.hetzner_settings_map.node_pools, [])) > 0
+  azure_enabled      = try(local.azure_settings_map.enabled, false) && length(try(local.azure_settings_map.node_pools, [])) > 0
+  vsphere_enabled    = try(local.vsphere_settings_map.enabled, false) && length(try(local.vsphere_settings_map.node_pools, [])) > 0
+  cloudflare_enabled = try(local.cloudflare_settings_map.enabled, false) && try(length(trimspace(local.cloudflare_settings_map.zone_id)) > 0, false)
+
+  hetzner_env_token = local.hetzner_settings_map.enabled && fileexists("/proc/self/environ") ? (
+    try(element([
+      for entry in split("\u0000", file("/proc/self/environ")) :
+      trimprefix(entry, "HCLOUD_TOKEN=")
+      if startswith(entry, "HCLOUD_TOKEN=")
+    ], 0), null)
+  ) : null
+
+  hetzner_file_token = (
+    local.hetzner_settings_map.credentials_file != null &&
+    local.hetzner_settings_map.credentials_file != "" &&
+    can(file(local.hetzner_settings_map.credentials_file)) &&
+    try(length(trimspace(chomp(file(local.hetzner_settings_map.credentials_file)))), 0) > 0
+  ) ? trimspace(chomp(file(local.hetzner_settings_map.credentials_file))) : null
+
+  hetzner_token = local.hetzner_settings_map.enabled ? try(coalesce(
+    try(trimspace(local.hetzner_env_token), null),
+    try(trimspace(local.hetzner_settings_map.token), null),
+    local.hetzner_file_token
+  ), null) : null
+
+  cloudflare_env_token = local.cloudflare_enabled && fileexists("/proc/self/environ") ? (
+    try(element([
+      for entry in split("\u0000", file("/proc/self/environ")) :
+      trimprefix(entry, "CF_API_TOKEN=")
+      if startswith(entry, "CF_API_TOKEN=")
+    ], 0), null)
+  ) : null
+
+  cloudflare_api_token = local.cloudflare_enabled ? coalesce(
+    try(trimspace(local.cloudflare_env_token), null),
+    try(trimspace(local.cloudflare_settings_map.api_token), null)
+  ) : null
+
+  configured_node_pools = concat(
+    local.aws_enabled ? local.aws_settings_map.node_pools : [],
+    local.hetzner_enabled ? local.hetzner_settings_map.node_pools : [],
+    local.azure_enabled ? local.azure_settings_map.node_pools : [],
+    local.vsphere_enabled ? local.vsphere_settings_map.node_pools : []
+  )
+
+  manager_pool_count = length([
+    for pool in local.configured_node_pools : 1
+    if length([
+      for role in(
+        length(try(pool.roles, [])) > 0 ?
+        [for r in pool.roles : lower(r)] :
+        (try(pool.role, null) != null ? [lower(pool.role)] : [])
+      ) : role
+      if role == "manager"
+    ]) > 0
+  ])
+
+  artifacts_dir = abspath(coalesce(var.artifacts_dir, "${path.root}/artifacts"))
+  ssh_dir       = "${local.artifacts_dir}/ssh"
+  config_dir    = "${local.artifacts_dir}/configs"
+
+  launchpad_kind = var.enable_msr ? "mke+msr" : "mke"
+}
