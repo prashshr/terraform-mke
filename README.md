@@ -41,7 +41,10 @@ make plan
 make apply
 make launchpad
 make mkectl
+make destroy
 ```
+
+`make destroy` runs `terraform destroy`. If `cloudflare_settings` is enabled, Terraform can still refuse to delete the managed A record because the Cloudflare resource uses `prevent_destroy = true`.
 
 ## Credentials
 
