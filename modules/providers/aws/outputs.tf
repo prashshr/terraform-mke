@@ -23,7 +23,7 @@ output "hosts" {
 }
 
 output "manager_lb_dns" {
-  value = try(aws_lb.manager[0].dns_name, null)
+  value = try(aws_lb.mke3[0].dns_name, null)
 }
 
 output "mke4_ingress_lb_dns" {
@@ -32,10 +32,6 @@ output "mke4_ingress_lb_dns" {
 
 output "ingress_lb_dns" {
   value = try(aws_lb.ingress[0].dns_name, null)
-}
-
-output "api_lb_dns" {
-  value = try(aws_lb.api[0].dns_name, null)
 }
 
 output "mke4_ui_lb_dns" {

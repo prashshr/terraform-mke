@@ -29,3 +29,4 @@ artifacts/
 *.bak
 *.swp
 .DS_Store
+*.out

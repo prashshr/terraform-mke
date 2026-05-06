@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 init:
 	terraform init
-	python3 scripts/render_hosts_from_state.py
+	python3 artifacts/scripts/render_hosts_from_state.py
 
 plan:
 	terraform plan
@@ -46,7 +46,7 @@ mke-cleanup:
 	@set -e; \
 	for i in $$(launchpad describe -c artifacts/configs/launchpad.yaml hosts | egrep -v ADDRESS | awk '{ print $$1 }'); do \
 		echo "Cleaning node: $$i"; \
-		ssh -o StrictHostKeyChecking=no -i artifacts/ssh/ps-mke-aws.pem ec2-user@$$i 'bash -s' < artifacts/scripts/cleanup_masternode_script.sh; \
+		ssh -o StrictHostKeyChecking=no -i artifacts/ssh/ps-mke-aws.pem ec2-user@$$i 'bash -s' < ./artifacts/scripts/cleanup_masternode_script.sh; \
 	done
 	@echo "MKE cleanup complete!"
 
