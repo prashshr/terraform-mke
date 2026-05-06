@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply destroy mke3 mke4 mke3-upgrade-prereq mkectl-upgrade
+.PHONY: init plan apply destroy mke3 mke4 mke3-upgrade-prereq mkectl-upgrade mke-cleanup
 
 init:
 	terraform init
@@ -40,3 +40,13 @@ mkectl-upgrade:
 	  --gateway-http-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTP_NODE_PORT" \
 	  --gateway-https-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT" \
 	  --force
+
+mke-cleanup:
+	@echo "Starting MKE node cleanup..."
+	@set -e; \
+	for i in $$(launchpad describe -c artifacts/configs/launchpad.yaml hosts | egrep -v ADDRESS | awk '{ print $$1 }'); do \
+		echo "Cleaning node: $$i"; \
+		ssh -o StrictHostKeyChecking=no -i artifacts/ssh/ps-mke-aws.pem ec2-user@$$i 'bash -s' < artifacts/scripts/cleanup_masternode_script.sh; \
+	done
+	@echo "MKE cleanup complete!"
+
