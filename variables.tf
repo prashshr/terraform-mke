@@ -14,6 +14,7 @@ variable "admin_password" {
   description = "Password for both Launchpad and mkectl administrative users."
   type        = string
   sensitive   = true
+  default     = "mkepassword"
 }
 
 variable "enable_msr" {
@@ -25,25 +26,43 @@ variable "enable_msr" {
 variable "mke3_version" {
   description = "Launchpad (MKE 3.x) version."
   type        = string
-  default     = "3.8.7"
+  default     = "3.8.11"
 }
 
 variable "mke4_version" {
   description = "mkectl (MKE 4.x) version."
   type        = string
-  default     = "4.1.2"
+  default     = "4.1.5"
+}
+
+variable "mke4_ui_backend_port" {
+  description = "Backend target port for the MKE4 UI load balancer."
+  type        = number
+  default     = 34001
+}
+
+variable "mke4_gateway_http_node_port" {
+  description = "Gateway HTTP node port passed to mkectl upgrade."
+  type        = number
+  default     = 34000
+}
+
+variable "mke4_gateway_https_node_port" {
+  description = "Gateway HTTPS node port passed to mkectl upgrade."
+  type        = number
+  default     = 34001
 }
 
 variable "msr_version" {
   description = "MSR version when MSR hosts are requested."
   type        = string
-  default     = "2.9.3"
+  default     = "2.9.29"
 }
 
 variable "mcr_version" {
   description = "Mirantis Container Runtime version provided to Launchpad templates."
   type        = string
-  default     = "23.0.13"
+  default     = "25.0.13"
 }
 
 variable "artifacts_dir" {

@@ -27,6 +27,18 @@ output "manager_lb_dns" {
 }
 
 output "mke4_ingress_lb_dns" {
+  value = try(aws_lb.ingress[0].dns_name, null)
+}
+
+output "ingress_lb_dns" {
+  value = try(aws_lb.ingress[0].dns_name, null)
+}
+
+output "api_lb_dns" {
+  value = try(aws_lb.api[0].dns_name, null)
+}
+
+output "mke4_ui_lb_dns" {
   value = try(aws_lb.mke4[0].dns_name, null)
 }
 

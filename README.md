@@ -1,59 +1,142 @@
-# terraform-mke
+# terraform-ps
 
-Terraform stack for provisioning Mirantis Kubernetes Engine infrastructure on AWS or Hetzner and rendering the deployment inputs consumed by Launchpad and `mkectl`.
+Terraform for provisioning MKE infrastructure on AWS or Hetzner and generating the config files used for:
 
-Generated outputs:
+- MKE3 deployment via Launchpad
+- MKE4 deployment via `mkectl`
+- MKE3 -> MKE4 upgrade via `mkectl upgrade`
 
-- `artifacts/configs/launchpad.yaml`
-- `artifacts/configs/mke4.yaml`
+## Start here
 
-## Features
-
-- Provision AWS EC2 node pools for managers, workers, and optional MSR/registry nodes
-- Provision AWS network load balancers for manager access, MKE ingress, and optional MSR
-- Provision Hetzner servers, firewalls, optional private networking, and load balancers
-- Optionally manage Cloudflare A records for Hetzner load balancer endpoints
-- Render Launchpad inventory and MKE4 configuration from the same Terraform inputs
-- Export host metadata, SSH key paths, and rendered config locations as Terraform outputs
-
-## Repository layout
-
-- `main.tf`, `variables.tf`, `locals.tf`: shared orchestration, input schema, and normalization
-- `modules/providers/aws`: AWS infrastructure module
-- `modules/providers/hetzner`: Hetzner infrastructure module
-- `templates/launchpad.yaml.tmpl`: Launchpad inventory template
-- `templates/mke4.yaml.tmpl`: MKE4 cluster configuration template
-- `scripts/`: helper scripts for node preparation and maintenance tasks
-
-## Important behavior
-
-- `enable_msr = true` is required for the Launchpad template to render a populated `msr:` section.
-- AWS MKE ingress uses an NLB listener on `443` forwarding to node port `33001`.
-- The AWS node port `33001` security group rule is intentionally open to `0.0.0.0/0`. Internet-facing NLBs preserve client IP, so restricting the rule to VPC CIDRs breaks public ingress.
-- Hetzner private networking is optional. When attached, load balancer targets use private IPs and internal firewall rules restrict traffic to private CIDRs.
-- SSH keys, rendered artifacts, state files, and local credential files are intentionally ignored by Git and should remain local only.
-
-## Common workflow
+Normal workflow:
 
 ```bash
 make init
 make plan
 make apply
-make launchpad
+make mke3
+make mke3-upgrade-prereq
+make mkectl-upgrade
 make mkectl
 make destroy
 ```
 
-`make destroy` runs `terraform destroy`. If `cloudflare_settings` is enabled, Terraform can still refuse to delete the managed A record because the Cloudflare resource uses `prevent_destroy = true`.
+What these do:
 
-## Credentials
+- `make init`
+  - initializes Terraform
+  - regenerates `artifacts/configs/hosts.yaml` from existing state if present
+- `make plan`
+  - shows infra changes
+- `make apply`
+  - applies infra changes
+  - renders config artifacts
+- `make mke3`
+  - Install MKE3 using `artifacts/config/launchpad.yaml`
+- `make mke3-upgrade-prereq`
+  - updates MKE3 config so `calico_kdd = true`
+- `make mkectl-upgrade`
+  - upgrades MKE3 to MKE4
+- `make mkectl`
+  - Install MKE using `artifacts/config/mke4.yaml`
+- `make destroy`
+  - destroys terraform managed infrastructure resources
 
-Keep credentials outside the repository history. Expected local inputs are:
+## What it creates
 
-- AWS shared credentials file: `credentials/aws-profile`
-- Hetzner token file: `credentials/hetzner.token`
-- Cloudflare token: `CF_API_TOKEN` environment variable or `cloudflare_settings.api_token`
+Infrastructure:
+- nodes for `manager`, `worker`, and optional `msr`
+- load balancers
+- SSH keys under `artifacts/ssh`
 
-## Publishing note
+Config files:
+- `artifacts/configs/launchpad.yaml`
+- `artifacts/configs/mke4.yaml`
+- `artifacts/configs/hosts.yaml`
+- `artifacts/configs/mkectl-upgrade.env`
 
-This repository is intended to be public. Do not commit `terraform.tfvars`, Terraform state, generated SSH keys, rendered artifacts, or provider credential files.
+## Load balancer layout
+
+Current layout is split by purpose:
+
+- MKE3 UI
+  - `443 -> 443`
+- Ingress
+  - `443 -> 33001`
+- Kubernetes API
+  - `6443 -> 6443`
+- MKE4 UI
+  - `443 -> 34001` by default
+- MSR
+  - `443 -> 443` when MSR nodes are enabled
+
+`mke4_ui_backend_port` is configurable in `terraform.tfvars`.
+
+## Main files
+
+- `terraform.tfvars`
+  - cluster name, versions, node pools, provider settings
+- `main.tf`
+  - shared orchestration and rendered artifacts
+- `modules/providers/aws`
+  - AWS infrastructure
+- `modules/providers/hetzner`
+  - Hetzner infrastructure
+- `templates/launchpad.yaml.tmpl`
+  - MKE3 config template
+- `templates/mke4.yaml.tmpl`
+  - MKE4 config template
+- `scripts/mke3_upgrade_prereq.sh`
+  - sets `calico_kdd = true` on the running MKE3 cluster before upgrade
+
+## Required local files
+
+- AWS credentials:
+  - `credentials/aws-profile`
+- Hetzner token:
+  - `credentials/hetzner.token`
+
+Keep these local. Do not commit credentials, state, SSH keys, or rendered artifacts.
+
+
+## Important values in `terraform.tfvars`
+
+Top-level:
+
+```hcl
+admin_username               = "admin"
+admin_password               = "mkepassword"
+mke3_version                 = "3.8.7"
+mke4_version                 = "4.1.5"
+mke4_ui_backend_port         = 34001
+mke4_gateway_http_node_port  = 34000
+mke4_gateway_https_node_port = 34001
+enable_msr                   = true
+```
+
+Notes:
+- `admin_password` is used for both rendered MKE3 and MKE4 configs
+- `mke4_ui_backend_port` controls the MKE4 UI LB backend port
+- `enable_msr = true` is required if you want a populated MSR section in `launchpad.yaml`
+
+## Generated upgrade env file
+
+`artifacts/configs/mkectl-upgrade.env` is generated from Terraform values and contains:
+
+- `MKCTL_UPGRADE_HOSTS_PATH`
+- `MKCTL_UPGRADE_ADMIN_USERNAME`
+- `MKCTL_UPGRADE_ADMIN_PASSWORD`
+- `MKCTL_MKE3_EXTERNAL_ADDRESS`
+- `MKCTL_UPGRADE_EXTERNAL_ADDRESS`
+- `MKCTL_UPGRADE_GATEWAY_HTTP_NODE_PORT`
+- `MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT`
+
+`make mkectl-upgrade` reads this file automatically.
+
+## Destroy
+
+```bash
+make destroy
+```
+
+If Cloudflare is enabled and managed records use `prevent_destroy`, Terraform may refuse to remove them automatically.

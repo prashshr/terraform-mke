@@ -1,0 +1,7 @@
+hosts:
+%{ for host in hosts ~}
+  - address: ${host.address}
+    port: ${host.port}
+    user: ${host.user}
+    keyPath: ${host.keyPath}
+%{ endfor ~}

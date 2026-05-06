@@ -1,9 +1,10 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply destroy launchpad mkectl
+.PHONY: init plan apply destroy mke3 mke4 mke3-upgrade-prereq mkectl-upgrade
 
 init:
 	terraform init
+	python3 scripts/render_hosts_from_state.py
 
 plan:
 	terraform plan
@@ -14,9 +15,28 @@ apply:
 destroy:
 	terraform destroy
 
-launchpad:
-	launchpad apply -c artifacts/configs/launchpad.yaml
+mke3:
+	launchpad apply -c artifacts/configs/launchpad.yaml --debug
 
-mkectl:
+mke4:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
-	mkectl apply -f artifacts/configs/mke4.yaml
+	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+
+mke3-upgrade-prereq:
+	./artifacts/scripts/mke3_upgrade_prereq.sh
+
+mkectl-upgrade:
+	@test -f artifacts/configs/mkectl-upgrade.env || { echo "missing artifacts/configs/mkectl-upgrade.env; run make apply first"; exit 1; }
+	@set -a; . artifacts/configs/mkectl-upgrade.env; set +a; \
+	mkectl upgrade \
+	  --hosts-path "$$MKCTL_UPGRADE_HOSTS_PATH" \
+	  --mke3-admin-username "$$MKCTL_UPGRADE_ADMIN_USERNAME" \
+	  --mke3-admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" \
+	  --external-address "$$MKCTL_UPGRADE_EXTERNAL_ADDRESS" \
+	  -l debug \
+	  --skip-cpu-cores-check \
+	  --skip-total-memory-check \
+	  --cni-check-port 81 \
+	  --gateway-http-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTP_NODE_PORT" \
+	  --gateway-https-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT" \
+	  --force

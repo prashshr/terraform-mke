@@ -49,3 +49,7 @@ variable "dns_source_ips" {
   type    = list(string)
   default = []
 }
+
+variable "mke4_ui_backend_port" {
+  type = number
+}

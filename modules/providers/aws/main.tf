@@ -213,9 +213,17 @@ resource "aws_security_group" "cluster" {
   }
 
   ingress {
-    description = "MKE4 ingress NodePort"
+    description = "MKE ingress HTTPS NodePort"
     from_port   = 33001
     to_port     = 33001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "MKE4 UI backend NodePort"
+    from_port   = var.mke4_ui_backend_port
+    to_port     = var.mke4_ui_backend_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -337,10 +345,78 @@ resource "aws_lb_target_group" "manager_443" {
   }
 }
 
-resource "aws_lb_target_group" "manager_6443" {
+resource "aws_lb" "ingress" {
   count = length(local.manager_instance_keys) > 0 ? 1 : 0
 
-  name        = "${substr(var.resource_prefix, 0, 17)}-mgr6443"
+  name               = "${substr(var.resource_prefix, 0, 14)}-ingress"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = [for subnet in aws_subnet.public : subnet.id]
+
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.default_tags, {
+    Name = "${var.resource_prefix}-ingress"
+  })
+}
+
+resource "aws_lb_target_group" "ingress_443" {
+  count = length(local.manager_instance_keys) > 0 ? 1 : 0
+
+  name        = "${substr(var.resource_prefix, 0, 17)}-ing33001"
+  port        = 33001
+  protocol    = "TCP"
+  target_type = "instance"
+  vpc_id      = aws_vpc.cluster.id
+
+  health_check {
+    protocol = "TCP"
+    port     = "33001"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "ingress_443" {
+  for_each = length(local.manager_instance_keys) > 0 ? {
+    for key in local.manager_instance_keys : key => aws_instance.node[key].id
+  } : {}
+
+  target_group_arn = aws_lb_target_group.ingress_443[0].arn
+  target_id        = each.value
+  port             = 33001
+}
+
+resource "aws_lb_listener" "ingress_443" {
+  count = length(local.manager_instance_keys) > 0 ? 1 : 0
+
+  load_balancer_arn = aws_lb.ingress[0].arn
+  port              = 443
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ingress_443[0].arn
+  }
+}
+
+resource "aws_lb" "api" {
+  count = length(local.manager_instance_keys) > 0 ? 1 : 0
+
+  name               = "${substr(var.resource_prefix, 0, 18)}-api"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = [for subnet in aws_subnet.public : subnet.id]
+
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.default_tags, {
+    Name = "${var.resource_prefix}-api"
+  })
+}
+
+resource "aws_lb_target_group" "api_6443" {
+  count = length(local.manager_instance_keys) > 0 ? 1 : 0
+
+  name        = "${substr(var.resource_prefix, 0, 17)}-api6443"
   port        = 6443
   protocol    = "TCP"
   target_type = "instance"
@@ -362,12 +438,12 @@ resource "aws_lb_target_group_attachment" "manager_443" {
   port             = 443
 }
 
-resource "aws_lb_target_group_attachment" "manager_6443" {
+resource "aws_lb_target_group_attachment" "api_6443" {
   for_each = length(local.manager_instance_keys) > 0 ? {
     for key in local.manager_instance_keys : key => aws_instance.node[key].id
   } : {}
 
-  target_group_arn = aws_lb_target_group.manager_6443[0].arn
+  target_group_arn = aws_lb_target_group.api_6443[0].arn
   target_id        = each.value
   port             = 6443
 }
@@ -385,16 +461,16 @@ resource "aws_lb_listener" "manager_443" {
   }
 }
 
-resource "aws_lb_listener" "manager_6443" {
+resource "aws_lb_listener" "api_6443" {
   count = length(local.manager_instance_keys) > 0 ? 1 : 0
 
-  load_balancer_arn = aws_lb.manager[0].arn
+  load_balancer_arn = aws_lb.api[0].arn
   port              = 6443
   protocol          = "TCP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.manager_6443[0].arn
+    target_group_arn = aws_lb_target_group.api_6443[0].arn
   }
 }
 
@@ -416,30 +492,15 @@ resource "aws_lb" "mke4" {
 resource "aws_lb_target_group" "mke4_443" {
   count = length(local.manager_instance_keys) > 0 ? 1 : 0
 
-  name        = "${substr(var.resource_prefix, 0, 17)}-ing33001"
-  port        = 33001
+  name        = "${substr(var.resource_prefix, 0, 12)}-m4ui${var.mke4_ui_backend_port}"
+  port        = var.mke4_ui_backend_port
   protocol    = "TCP"
   target_type = "instance"
   vpc_id      = aws_vpc.cluster.id
 
   health_check {
     protocol = "TCP"
-    port     = "33001"
-  }
-}
-
-resource "aws_lb_target_group" "mke4_6443" {
-  count = length(local.manager_instance_keys) > 0 ? 1 : 0
-
-  name        = "${substr(var.resource_prefix, 0, 16)}-mke46443"
-  port        = 6443
-  protocol    = "TCP"
-  target_type = "instance"
-  vpc_id      = aws_vpc.cluster.id
-
-  health_check {
-    protocol = "TCP"
-    port     = "6443"
+    port     = tostring(var.mke4_ui_backend_port)
   }
 }
 
@@ -450,17 +511,7 @@ resource "aws_lb_target_group_attachment" "mke4_443" {
 
   target_group_arn = aws_lb_target_group.mke4_443[0].arn
   target_id        = each.value
-  port             = 33001
-}
-
-resource "aws_lb_target_group_attachment" "mke4_6443" {
-  for_each = length(local.manager_instance_keys) > 0 ? {
-    for key in local.manager_instance_keys : key => aws_instance.node[key].id
-  } : {}
-
-  target_group_arn = aws_lb_target_group.mke4_6443[0].arn
-  target_id        = each.value
-  port             = 6443
+  port             = var.mke4_ui_backend_port
 }
 
 resource "aws_lb_listener" "mke4_443" {
@@ -473,19 +524,6 @@ resource "aws_lb_listener" "mke4_443" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.mke4_443[0].arn
-  }
-}
-
-resource "aws_lb_listener" "mke4_6443" {
-  count = length(local.manager_instance_keys) > 0 ? 1 : 0
-
-  load_balancer_arn = aws_lb.mke4[0].arn
-  port              = 6443
-  protocol          = "TCP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.mke4_6443[0].arn
   }
 }
 

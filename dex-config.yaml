@@ -1,0 +1,42 @@
+enablePasswordDB: true
+frontend:
+  dir: /srv/dex/web
+  issuer: Mirantis Kubernetes Engine
+  theme: light
+grpc:
+  addr: 127.0.0.1:5557
+  tlsCert: /etc/dex/certs/grpc/tls.crt
+  tlsClientCA: /etc/dex/certs/grpc/ca.crt
+  tlsKey: /etc/dex/certs/grpc/tls.key
+issuer: https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com/dex
+staticClients:
+- id: mke-dashboard
+  name: MKE Dashboard
+  public: true
+  redirectURIs:
+  - https://127.0.0.1:3000
+  - https://localhost:3000
+  - https://3.253.197.175:34001
+  - https://3.253.197.175
+  - https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com
+  - https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com/
+  - https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com/dex/callback
+- id: mkectl
+  name: mkectl
+  public: true
+  redirectURIs:
+  - http://localhost:8000
+  - http://localhost:18000
+  - urn:ietf:wg:oauth:2.0:oob
+  - /device/callback
+storage:
+  config:
+    inCluster: true
+  type: kubernetes
+web:
+  http: 127.0.0.1:5556
+  https: 127.0.0.1:5554
+  tlsCert: /etc/dex/certs/tls/tls.crt
+  tlsKey: /etc/dex/certs/tls/tls.key
+  tlsMaxVersion: 1.3
+  tlsMinVersion: 1.2

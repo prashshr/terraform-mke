@@ -166,9 +166,10 @@ resource "hcloud_firewall" "cluster" {
   }
 
   dynamic "rule" {
-    for_each = toset([
+    for_each = toset(concat([
       "179",
       "2376",
+      "33001",
       "5473",
       "6444",
       "9055",
@@ -179,7 +180,7 @@ resource "hcloud_firewall" "cluster" {
       "12378-12388",
       "12391",
       "12392",
-    ])
+    ], [tostring(var.mke4_ui_backend_port)]))
 
     content {
       direction  = "in"
@@ -246,10 +247,71 @@ resource "hcloud_load_balancer_service" "manager_443" {
   }
 }
 
-resource "hcloud_load_balancer_service" "manager_6443" {
+resource "hcloud_load_balancer" "ingress" {
   count = length(local.manager_keys) > 0 ? 1 : 0
 
-  load_balancer_id = hcloud_load_balancer.manager[0].id
+  name               = "${var.cluster_name}-ingress"
+  load_balancer_type = "lb11"
+  location           = var.location
+
+  labels = merge(local.common_labels, {
+    role = "ingress-lb"
+  })
+}
+
+resource "hcloud_load_balancer_service" "ingress_443" {
+  count = length(local.manager_keys) > 0 ? 1 : 0
+
+  load_balancer_id = hcloud_load_balancer.ingress[0].id
+  protocol         = "tcp"
+  listen_port      = 443
+  destination_port = 33001
+
+  health_check {
+    protocol = "tcp"
+    port     = 33001
+    interval = 15
+    timeout  = 10
+    retries  = 3
+  }
+}
+
+resource "hcloud_load_balancer_network" "ingress" {
+  count = length(local.manager_keys) > 0 && local.network_attached ? 1 : 0
+
+  load_balancer_id = hcloud_load_balancer.ingress[0].id
+  network_id       = local.network_id
+}
+
+resource "hcloud_load_balancer_target" "ingress_nodes" {
+  for_each = length(local.manager_keys) > 0 ? {
+    for key in local.manager_keys : key => hcloud_server.node[key].id
+  } : {}
+
+  type             = "server"
+  load_balancer_id = hcloud_load_balancer.ingress[0].id
+  server_id        = each.value
+  use_private_ip   = local.network_attached
+
+  depends_on = [hcloud_load_balancer_network.ingress]
+}
+
+resource "hcloud_load_balancer" "api" {
+  count = length(local.manager_keys) > 0 ? 1 : 0
+
+  name               = "${var.cluster_name}-api"
+  load_balancer_type = "lb11"
+  location           = var.location
+
+  labels = merge(local.common_labels, {
+    role = "api-lb"
+  })
+}
+
+resource "hcloud_load_balancer_service" "api_6443" {
+  count = length(local.manager_keys) > 0 ? 1 : 0
+
+  load_balancer_id = hcloud_load_balancer.api[0].id
   protocol         = "tcp"
   listen_port      = 6443
   destination_port = 6443
@@ -263,24 +325,24 @@ resource "hcloud_load_balancer_service" "manager_6443" {
   }
 }
 
-resource "hcloud_load_balancer_network" "manager" {
+resource "hcloud_load_balancer_network" "api" {
   count = length(local.manager_keys) > 0 && local.network_attached ? 1 : 0
 
-  load_balancer_id = hcloud_load_balancer.manager[0].id
+  load_balancer_id = hcloud_load_balancer.api[0].id
   network_id       = local.network_id
 }
 
-resource "hcloud_load_balancer_target" "manager_nodes" {
+resource "hcloud_load_balancer_target" "api_nodes" {
   for_each = length(local.manager_keys) > 0 ? {
     for key in local.manager_keys : key => hcloud_server.node[key].id
   } : {}
 
   type             = "server"
-  load_balancer_id = hcloud_load_balancer.manager[0].id
+  load_balancer_id = hcloud_load_balancer.api[0].id
   server_id        = each.value
   use_private_ip   = local.network_attached
 
-  depends_on = [hcloud_load_balancer_network.manager]
+  depends_on = [hcloud_load_balancer_network.api]
 }
 
 resource "hcloud_load_balancer" "mke4" {
@@ -301,28 +363,11 @@ resource "hcloud_load_balancer_service" "mke4_443" {
   load_balancer_id = hcloud_load_balancer.mke4[0].id
   protocol         = "tcp"
   listen_port      = 443
-  destination_port = 33001
+  destination_port = var.mke4_ui_backend_port
 
   health_check {
     protocol = "tcp"
-    port     = 33001
-    interval = 15
-    timeout  = 10
-    retries  = 3
-  }
-}
-
-resource "hcloud_load_balancer_service" "mke4_6443" {
-  count = length(local.manager_keys) > 0 ? 1 : 0
-
-  load_balancer_id = hcloud_load_balancer.mke4[0].id
-  protocol         = "tcp"
-  listen_port      = 6443
-  destination_port = 6443
-
-  health_check {
-    protocol = "tcp"
-    port     = 6443
+    port     = var.mke4_ui_backend_port
     interval = 15
     timeout  = 10
     retries  = 3

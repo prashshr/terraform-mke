@@ -30,3 +30,7 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "mke4_ui_backend_port" {
+  type = number
+}
