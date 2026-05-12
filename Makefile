@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply destroy mke3 mke4 mke3-upgrade-prereq mkectl-upgrade mke-cleanup
+.PHONY: init plan apply destroy mke3 mke4 mke4-upgrade-prereq mkectl-upgrade nuke-it
 
 init:
 	terraform init
@@ -22,7 +22,7 @@ mke4:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
 
-mke3-upgrade-prereq:
+mke4-upgrade-prereq:
 	./artifacts/scripts/mke3_upgrade_prereq.sh
 
 mkectl-upgrade:
@@ -41,7 +41,7 @@ mkectl-upgrade:
 	  --gateway-https-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT" \
 	  --force
 
-mke-cleanup:
+nuke-it:
 	@echo "Starting MKE node cleanup..."
 	@set -e; \
 	for i in $$(launchpad describe -c artifacts/configs/launchpad.yaml hosts | egrep -v ADDRESS | awk '{ print $$1 }'); do \
