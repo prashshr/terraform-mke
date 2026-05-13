@@ -95,6 +95,35 @@ locals {
   azure_settings_map      = merge(local.provider_defaults.azure, local.azure_settings_override)
   vsphere_settings_map    = merge(local.provider_defaults.vsphere, local.vsphere_settings_override)
 
+  root_domain = coalesce(
+    try(var.root_domain, null),
+    try(local.cloudflare_settings_map.zone_name, null),
+    "samkhya.cloud"
+  )
+
+  app_domain_mke3    = coalesce(try(var.app_domain_mke3, null), "mke3")
+  app_domain_mke4    = coalesce(try(var.app_domain_mke4, null), "mke4")
+  app_domain_ingress = coalesce(try(var.app_domain_ingress, null), "ingress")
+  app_domain_msr     = coalesce(try(var.app_domain_msr, null), "msr")
+
+  mke3_domain    = "${local.app_domain_mke3}.${local.root_domain}"
+  mke4_domain    = "${local.app_domain_mke4}.${local.root_domain}"
+  ingress_domain = "${local.app_domain_ingress}.${local.root_domain}"
+  msr_domain     = "${local.app_domain_msr}.${local.root_domain}"
+
+  cloudflare_record_name_manager = coalesce(
+    try(local.cloudflare_settings_map.record_name_manager, null),
+    local.mke3_domain
+  )
+  cloudflare_record_name_ingress = coalesce(
+    try(local.cloudflare_settings_map.record_name_ingress, null),
+    local.ingress_domain
+  )
+  cloudflare_record_name_mke4_ui = coalesce(
+    try(local.cloudflare_settings_map.record_name_mke4_ui, null),
+    local.mke4_domain
+  )
+
   aws_enabled     = try(local.aws_settings_map.enabled, false) && length(try(local.aws_settings_map.node_pools, [])) > 0
   hetzner_enabled = try(local.hetzner_settings_map.enabled, false) && length(try(local.hetzner_settings_map.node_pools, [])) > 0
   azure_enabled   = try(local.azure_settings_map.enabled, false) && length(try(local.azure_settings_map.node_pools, [])) > 0
@@ -155,20 +184,20 @@ locals {
 
   aws_cloudflare_records = local.aws_enabled ? [
     for rec in [
-      local.cloudflare_settings_map.record_name_manager != null && local.aws_manager_lb_dns != null ? {
-        name    = local.cloudflare_settings_map.record_name_manager
+      local.cloudflare_record_name_manager != null && local.aws_manager_lb_dns != null ? {
+        name    = local.cloudflare_record_name_manager
         type    = "CNAME"
         content = local.aws_manager_lb_dns
         proxied = false
       } : null,
-      local.cloudflare_settings_map.record_name_ingress != null && local.aws_ingress_lb_dns != null ? {
-        name    = local.cloudflare_settings_map.record_name_ingress
+      local.cloudflare_record_name_ingress != null && local.aws_ingress_lb_dns != null ? {
+        name    = local.cloudflare_record_name_ingress
         type    = "CNAME"
         content = local.aws_ingress_lb_dns
         proxied = false
       } : null,
-      local.cloudflare_settings_map.record_name_mke4_ui != null && local.aws_mke4_ui_lb_dns != null ? {
-        name    = local.cloudflare_settings_map.record_name_mke4_ui
+      local.cloudflare_record_name_mke4_ui != null && local.aws_mke4_ui_lb_dns != null ? {
+        name    = local.cloudflare_record_name_mke4_ui
         type    = "CNAME"
         content = local.aws_mke4_ui_lb_dns
         proxied = false
@@ -184,20 +213,20 @@ locals {
         content = local.hetzner_ingress_lb_ip
         proxied = false
       } : null,
-      local.cloudflare_settings_map.record_name_manager != null && local.hetzner_manager_lb_ip != null ? {
-        name    = local.cloudflare_settings_map.record_name_manager
+      local.cloudflare_record_name_manager != null && local.hetzner_manager_lb_ip != null ? {
+        name    = local.cloudflare_record_name_manager
         type    = "A"
         content = local.hetzner_manager_lb_ip
         proxied = false
       } : null,
-      local.cloudflare_settings_map.record_name_ingress != null && local.hetzner_ingress_lb_ip != null ? {
-        name    = local.cloudflare_settings_map.record_name_ingress
+      local.cloudflare_record_name_ingress != null && local.hetzner_ingress_lb_ip != null ? {
+        name    = local.cloudflare_record_name_ingress
         type    = "A"
         content = local.hetzner_ingress_lb_ip
         proxied = false
       } : null,
-      local.cloudflare_settings_map.record_name_mke4_ui != null && local.hetzner_mke4_ui_lb_ip != null ? {
-        name    = local.cloudflare_settings_map.record_name_mke4_ui
+      local.cloudflare_record_name_mke4_ui != null && local.hetzner_mke4_ui_lb_ip != null ? {
+        name    = local.cloudflare_record_name_mke4_ui
         type    = "A"
         content = local.hetzner_mke4_ui_lb_ip
         proxied = false

@@ -25,9 +25,11 @@ credentials/
 
 # Local artifacts and generated files
 artifacts/
+artifacts/tlscerts/
 *.log
 *.bak
 *.swp
 .DS_Store
 *.out
 mke-config.toml
+nohup.out

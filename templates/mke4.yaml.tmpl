@@ -8,7 +8,7 @@ spec:
   airgap:
     enabled: false
   apiServer:
-    externalAddress: ${api_server.external_address}
+    externalAddress: ${api_server.external_address}:6443
     sans:
 %{ for san in api_server.sans ~}
       - ${san}
@@ -25,6 +25,23 @@ spec:
     eventRateLimit:
       enabled: false
     requestTimeout: 1m0s
+%{ if mke4_tls_present ~}
+  certificates:
+    enabled: true
+    domainName: ${mke4_tls_common_name}
+    ca: |
+%{ for line in split("\n", mke4_tls_ca_pem) ~}
+      ${line}
+%{ endfor ~}
+    cert: |
+%{ for line in split("\n", mke4_tls_cert_pem) ~}
+      ${line}
+%{ endfor ~}
+    key: |
+%{ for line in split("\n", mke4_tls_key_pem) ~}
+      ${line}
+%{ endfor ~}
+%{ endif ~}
   authentication:
     expiry: {}
     ldap:

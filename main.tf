@@ -1,15 +1,67 @@
 resource "null_resource" "artifacts_dirs" {
   provisioner "local-exec" {
-    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${path.module}/artifacts/tlscerts/mke3\" \"${path.module}/artifacts/tlscerts/mke4\" \"${path.module}/artifacts/tlscerts/ingress\" \"${path.module}/artifacts/tlscerts/msr\""
+    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\""
   }
 
   triggers = {
     ssh_dir         = local.ssh_dir
     config_dir      = local.config_dir
-    tls_dir_mke3    = "${path.module}/artifacts/tlscerts/mke3"
-    tls_dir_ingress = "${path.module}/artifacts/tlscerts/ingress"
-    tls_dir_msr     = "${path.module}/artifacts/tlscerts/msr"
-    tls_dir_mke4    = "${path.module}/artifacts/tlscerts/mke4"
+    tls_dir_mke3    = local.mke3_tls_dir
+    tls_dir_ingress = local.ingress_tls_dir
+    tls_dir_msr     = local.msr_tls_dir
+    tls_dir_mke4    = local.mke4_tls_dir
+  }
+}
+
+data "external" "mke3_tls_existing" {
+  count = local.mke3_tls_wants_acme ? 1 : 0
+
+  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+
+  query = {
+    domain            = local.mke3_tls_common_name
+    cert_file         = local.mke3_tls_cert_file
+    key_file          = local.mke3_tls_key_file
+    min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
+  }
+}
+
+data "external" "mke4_tls_existing" {
+  count = local.mke4_tls_wants_acme ? 1 : 0
+
+  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+
+  query = {
+    domain            = local.mke4_tls_common_name
+    cert_file         = local.mke4_tls_cert_file
+    key_file          = local.mke4_tls_key_file
+    min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
+  }
+}
+
+data "external" "ingress_tls_existing" {
+  count = local.ingress_tls_wants_acme ? 1 : 0
+
+  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+
+  query = {
+    domain            = local.ingress_tls_common_name
+    cert_file         = local.ingress_tls_cert_file
+    key_file          = local.ingress_tls_key_file
+    min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
+  }
+}
+
+data "external" "msr_tls_existing" {
+  count = local.msr_tls_wants_acme ? 1 : 0
+
+  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+
+  query = {
+    domain            = local.msr_tls_common_name
+    cert_file         = local.msr_tls_cert_file
+    key_file          = local.msr_tls_key_file
+    min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
   }
 }
 
@@ -30,8 +82,9 @@ resource "acme_registration" "mke3" {
 resource "acme_certificate" "mke3" {
   count = local.mke3_tls_use_acme ? 1 : 0
 
-  account_key_pem = acme_registration.mke3[0].account_key_pem
-  common_name     = local.mke3_tls_common_name
+  account_key_pem               = acme_registration.mke3[0].account_key_pem
+  common_name                   = local.mke3_tls_common_name
+  revoke_certificate_on_destroy = false
 
   dns_challenge {
     provider = "cloudflare"
@@ -41,31 +94,30 @@ resource "acme_certificate" "mke3" {
   }
 }
 
-resource "local_file" "mke3_tls_ca" {
+resource "null_resource" "mke3_tls_files" {
   count = local.mke3_tls_enabled && (
-    local.mke3_tls_use_acme || try(length(trimspace(coalesce(var.mke3_tls.ca_pem, ""))) > 0, false)
+    local.mke3_tls_write_files
   ) ? 1 : 0
 
-  filename = local.mke3_tls_ca_file
-  content  = local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].issuer_pem, "") : try(var.mke3_tls.ca_pem, "")
-}
+  triggers = {
+    ca_sha   = sha256(local.mke3_tls_ca_pem)
+    cert_sha = sha256(local.mke3_tls_cert_pem)
+    key_sha  = sha256(local.mke3_tls_key_pem)
+    dir      = local.mke3_tls_dir
+  }
 
-resource "local_file" "mke3_tls_cert" {
-  count = local.mke3_tls_enabled && (
-    local.mke3_tls_use_acme || try(length(trimspace(coalesce(var.mke3_tls.cert_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.mke3_tls_cert_file
-  content  = local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].certificate_pem, "") : try(var.mke3_tls.cert_pem, "")
-}
-
-resource "local_file" "mke3_tls_key" {
-  count = local.mke3_tls_enabled && (
-    local.mke3_tls_use_acme || try(length(trimspace(coalesce(var.mke3_tls.key_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.mke3_tls_key_file
-  content  = local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].private_key_pem, "") : try(var.mke3_tls.key_pem, "")
+  provisioner "local-exec" {
+    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    environment = {
+      TLS_DIR       = local.mke3_tls_dir
+      TLS_CA_FILE   = local.mke3_tls_ca_file
+      TLS_CERT_FILE = local.mke3_tls_cert_file
+      TLS_KEY_FILE  = local.mke3_tls_key_file
+      TLS_CA_PEM    = local.mke3_tls_ca_pem
+      TLS_CERT_PEM  = local.mke3_tls_cert_pem
+      TLS_KEY_PEM   = local.mke3_tls_key_pem
+    }
+  }
 }
 
 resource "tls_private_key" "mke4_acme_account" {
@@ -85,8 +137,9 @@ resource "acme_registration" "mke4" {
 resource "acme_certificate" "mke4" {
   count = local.mke4_tls_use_acme ? 1 : 0
 
-  account_key_pem = acme_registration.mke4[0].account_key_pem
-  common_name     = local.mke4_tls_common_name
+  account_key_pem               = acme_registration.mke4[0].account_key_pem
+  common_name                   = local.mke4_tls_common_name
+  revoke_certificate_on_destroy = false
 
   dns_challenge {
     provider = "cloudflare"
@@ -97,31 +150,30 @@ resource "acme_certificate" "mke4" {
   }
 }
 
-resource "local_file" "mke4_tls_ca" {
+resource "null_resource" "mke4_tls_files" {
   count = local.mke4_tls_enabled && (
-    local.mke4_tls_use_acme || try(length(trimspace(coalesce(var.mke4_tls.ca_pem, ""))) > 0, false)
+    local.mke4_tls_write_files
   ) ? 1 : 0
 
-  filename = local.mke4_tls_ca_file
-  content  = local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].issuer_pem, "") : try(var.mke4_tls.ca_pem, "")
-}
+  triggers = {
+    ca_sha   = sha256(local.mke4_tls_ca_pem)
+    cert_sha = sha256(local.mke4_tls_cert_pem)
+    key_sha  = sha256(local.mke4_tls_key_pem)
+    dir      = local.mke4_tls_dir
+  }
 
-resource "local_file" "mke4_tls_cert" {
-  count = local.mke4_tls_enabled && (
-    local.mke4_tls_use_acme || try(length(trimspace(coalesce(var.mke4_tls.cert_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.mke4_tls_cert_file
-  content  = local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].certificate_pem, "") : try(var.mke4_tls.cert_pem, "")
-}
-
-resource "local_file" "mke4_tls_key" {
-  count = local.mke4_tls_enabled && (
-    local.mke4_tls_use_acme || try(length(trimspace(coalesce(var.mke4_tls.key_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.mke4_tls_key_file
-  content  = local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].private_key_pem, "") : try(var.mke4_tls.key_pem, "")
+  provisioner "local-exec" {
+    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    environment = {
+      TLS_DIR       = local.mke4_tls_dir
+      TLS_CA_FILE   = local.mke4_tls_ca_file
+      TLS_CERT_FILE = local.mke4_tls_cert_file
+      TLS_KEY_FILE  = local.mke4_tls_key_file
+      TLS_CA_PEM    = local.mke4_tls_ca_pem
+      TLS_CERT_PEM  = local.mke4_tls_cert_pem
+      TLS_KEY_PEM   = local.mke4_tls_key_pem
+    }
+  }
 }
 
 resource "tls_private_key" "ingress_acme_account" {
@@ -141,8 +193,9 @@ resource "acme_registration" "ingress" {
 resource "acme_certificate" "ingress" {
   count = local.ingress_tls_use_acme ? 1 : 0
 
-  account_key_pem = acme_registration.ingress[0].account_key_pem
-  common_name     = local.ingress_tls_common_name
+  account_key_pem               = acme_registration.ingress[0].account_key_pem
+  common_name                   = local.ingress_tls_common_name
+  revoke_certificate_on_destroy = false
 
   dns_challenge {
     provider = "cloudflare"
@@ -153,31 +206,30 @@ resource "acme_certificate" "ingress" {
   }
 }
 
-resource "local_file" "ingress_tls_ca" {
+resource "null_resource" "ingress_tls_files" {
   count = local.ingress_tls_enabled && (
-    local.ingress_tls_use_acme || try(length(trimspace(coalesce(var.ingress_tls.ca_pem, ""))) > 0, false)
+    local.ingress_tls_write_files
   ) ? 1 : 0
 
-  filename = local.ingress_tls_ca_file
-  content  = local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].issuer_pem, "") : try(var.ingress_tls.ca_pem, "")
-}
+  triggers = {
+    ca_sha   = sha256(local.ingress_tls_ca_pem)
+    cert_sha = sha256(local.ingress_tls_cert_pem)
+    key_sha  = sha256(local.ingress_tls_key_pem)
+    dir      = local.ingress_tls_dir
+  }
 
-resource "local_file" "ingress_tls_cert" {
-  count = local.ingress_tls_enabled && (
-    local.ingress_tls_use_acme || try(length(trimspace(coalesce(var.ingress_tls.cert_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.ingress_tls_cert_file
-  content  = local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].certificate_pem, "") : try(var.ingress_tls.cert_pem, "")
-}
-
-resource "local_file" "ingress_tls_key" {
-  count = local.ingress_tls_enabled && (
-    local.ingress_tls_use_acme || try(length(trimspace(coalesce(var.ingress_tls.key_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.ingress_tls_key_file
-  content  = local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].private_key_pem, "") : try(var.ingress_tls.key_pem, "")
+  provisioner "local-exec" {
+    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    environment = {
+      TLS_DIR       = local.ingress_tls_dir
+      TLS_CA_FILE   = local.ingress_tls_ca_file
+      TLS_CERT_FILE = local.ingress_tls_cert_file
+      TLS_KEY_FILE  = local.ingress_tls_key_file
+      TLS_CA_PEM    = local.ingress_tls_ca_pem
+      TLS_CERT_PEM  = local.ingress_tls_cert_pem
+      TLS_KEY_PEM   = local.ingress_tls_key_pem
+    }
+  }
 }
 
 resource "tls_private_key" "msr_acme_account" {
@@ -197,8 +249,9 @@ resource "acme_registration" "msr" {
 resource "acme_certificate" "msr" {
   count = local.msr_tls_use_acme ? 1 : 0
 
-  account_key_pem = acme_registration.msr[0].account_key_pem
-  common_name     = local.msr_tls_common_name
+  account_key_pem               = acme_registration.msr[0].account_key_pem
+  common_name                   = local.msr_tls_common_name
+  revoke_certificate_on_destroy = false
 
   dns_challenge {
     provider = "cloudflare"
@@ -209,31 +262,30 @@ resource "acme_certificate" "msr" {
   }
 }
 
-resource "local_file" "msr_tls_ca" {
+resource "null_resource" "msr_tls_files" {
   count = local.msr_tls_enabled && (
-    local.msr_tls_use_acme || try(length(trimspace(coalesce(var.msr_tls.ca_pem, ""))) > 0, false)
+    local.msr_tls_write_files
   ) ? 1 : 0
 
-  filename = local.msr_tls_ca_file
-  content  = local.msr_tls_use_acme ? try(acme_certificate.msr[0].issuer_pem, "") : try(var.msr_tls.ca_pem, "")
-}
+  triggers = {
+    ca_sha   = sha256(local.msr_tls_ca_pem)
+    cert_sha = sha256(local.msr_tls_cert_pem)
+    key_sha  = sha256(local.msr_tls_key_pem)
+    dir      = local.msr_tls_dir
+  }
 
-resource "local_file" "msr_tls_cert" {
-  count = local.msr_tls_enabled && (
-    local.msr_tls_use_acme || try(length(trimspace(coalesce(var.msr_tls.cert_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.msr_tls_cert_file
-  content  = local.msr_tls_use_acme ? try(acme_certificate.msr[0].certificate_pem, "") : try(var.msr_tls.cert_pem, "")
-}
-
-resource "local_file" "msr_tls_key" {
-  count = local.msr_tls_enabled && (
-    local.msr_tls_use_acme || try(length(trimspace(coalesce(var.msr_tls.key_pem, ""))) > 0, false)
-  ) ? 1 : 0
-
-  filename = local.msr_tls_key_file
-  content  = local.msr_tls_use_acme ? try(acme_certificate.msr[0].private_key_pem, "") : try(var.msr_tls.key_pem, "")
+  provisioner "local-exec" {
+    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    environment = {
+      TLS_DIR       = local.msr_tls_dir
+      TLS_CA_FILE   = local.msr_tls_ca_file
+      TLS_CERT_FILE = local.msr_tls_cert_file
+      TLS_KEY_FILE  = local.msr_tls_key_file
+      TLS_CA_PEM    = local.msr_tls_ca_pem
+      TLS_CERT_PEM  = local.msr_tls_cert_pem
+      TLS_KEY_PEM   = local.msr_tls_key_pem
+    }
+  }
 }
 
 module "aws" {
@@ -316,14 +368,14 @@ locals {
 
   mke3_tls_enabled = try(tobool(local.mke3_tls.enabled), false)
 
-  mke3_tls_use_acme = (
+  mke3_tls_wants_acme = (
     local.mke3_tls_enabled &&
     try(tobool(local.mke3_tls.use_acme), false)
   )
 
   mke3_tls_common_name = local.mke3_tls_enabled ? coalesce(
     try(local.mke3_tls.common_name, null),
-    local.cloudflare_settings_map.record_name_manager
+    local.cloudflare_record_name_manager
   ) : null
 
   mke3_tls_email = try(local.mke3_tls.email, null)
@@ -333,70 +385,132 @@ locals {
     "https://acme-v02.api.letsencrypt.org/directory"
   )
 
-  mke3_tls_dir       = "${path.module}/artifacts/tlscerts/mke3"
+  mke3_tls_dir       = local.mke3_tls_enabled ? "${local.artifacts_dir}/tlscerts/mke3/${local.mke3_tls_common_name}" : "${local.artifacts_dir}/tlscerts/mke3"
   mke3_tls_ca_file   = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/ca.pem" : null
   mke3_tls_cert_file = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/server.pem" : null
   mke3_tls_key_file  = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/key.pem" : null
-  mke3_tls_ca_path   = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/ca.pem" : null
-  mke3_tls_cert_path = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/server.pem" : null
-  mke3_tls_key_path  = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/key.pem" : null
+  mke3_tls_ca_path   = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/${local.mke3_tls_common_name}/ca.pem" : null
+  mke3_tls_cert_path = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/${local.mke3_tls_common_name}/server.pem" : null
+  mke3_tls_key_path  = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/${local.mke3_tls_common_name}/key.pem" : null
+
+  mke3_tls_use_existing   = local.mke3_tls_wants_acme && try(data.external.mke3_tls_existing[0].result.valid == "true", false)
+  mke3_tls_use_acme       = local.mke3_tls_wants_acme && !local.mke3_tls_use_existing
+  mke3_tls_ca_input_pem   = try(local.mke3_tls.ca_pem != null ? local.mke3_tls.ca_pem : "", "")
+  mke3_tls_cert_input_pem = try(local.mke3_tls.cert_pem != null ? local.mke3_tls.cert_pem : "", "")
+  mke3_tls_key_input_pem  = try(local.mke3_tls.key_pem != null ? local.mke3_tls.key_pem : "", "")
+  mke3_tls_ca_pem         = local.mke3_tls_use_existing ? (fileexists(local.mke3_tls_ca_file) ? file(local.mke3_tls_ca_file) : "") : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].issuer_pem, "") : local.mke3_tls_ca_input_pem
+  mke3_tls_cert_pem       = local.mke3_tls_use_existing ? file(local.mke3_tls_cert_file) : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].certificate_pem, "") : local.mke3_tls_cert_input_pem
+  mke3_tls_key_pem        = local.mke3_tls_use_existing ? file(local.mke3_tls_key_file) : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].private_key_pem, "") : local.mke3_tls_key_input_pem
+  mke3_tls_write_files = (
+    local.mke3_tls_use_acme ||
+    (length(trimspace(local.mke3_tls_cert_input_pem)) > 0 &&
+    length(trimspace(local.mke3_tls_key_input_pem)) > 0)
+  )
 
   mke4_tls = var.mke4_tls
 
   mke4_tls_enabled = try(tobool(local.mke4_tls.enabled), false)
 
-  mke4_tls_use_acme = (
+  mke4_tls_wants_acme = (
     local.mke4_tls_enabled &&
     try(tobool(local.mke4_tls.use_acme), false)
   )
 
   mke4_tls_common_name = local.mke4_tls_enabled ? coalesce(
     try(local.mke4_tls.common_name, null),
-    local.cloudflare_settings_map.record_name_mke4_ui
+    local.cloudflare_record_name_mke4_ui
   ) : null
 
-  mke4_tls_dir       = "${path.module}/artifacts/tlscerts/mke4"
+  mke4_tls_dir       = local.mke4_tls_enabled ? "${local.artifacts_dir}/tlscerts/mke4/${local.mke4_tls_common_name}" : "${local.artifacts_dir}/tlscerts/mke4"
   mke4_tls_ca_file   = "${local.mke4_tls_dir}/ca.pem"
   mke4_tls_cert_file = "${local.mke4_tls_dir}/server.pem"
   mke4_tls_key_file  = "${local.mke4_tls_dir}/key.pem"
+
+  mke4_tls_use_existing   = local.mke4_tls_wants_acme && try(data.external.mke4_tls_existing[0].result.valid == "true", false)
+  mke4_tls_use_acme       = local.mke4_tls_wants_acme && !local.mke4_tls_use_existing
+  mke4_tls_ca_input_pem   = try(local.mke4_tls.ca_pem != null ? local.mke4_tls.ca_pem : "", "")
+  mke4_tls_cert_input_pem = try(local.mke4_tls.cert_pem != null ? local.mke4_tls.cert_pem : "", "")
+  mke4_tls_key_input_pem  = try(local.mke4_tls.key_pem != null ? local.mke4_tls.key_pem : "", "")
+  mke4_tls_ca_pem         = local.mke4_tls_use_existing ? (fileexists(local.mke4_tls_ca_file) ? file(local.mke4_tls_ca_file) : "") : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].issuer_pem, "") : local.mke4_tls_ca_input_pem
+  mke4_tls_cert_pem       = local.mke4_tls_use_existing ? file(local.mke4_tls_cert_file) : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].certificate_pem, "") : local.mke4_tls_cert_input_pem
+  mke4_tls_key_pem        = local.mke4_tls_use_existing ? file(local.mke4_tls_key_file) : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].private_key_pem, "") : local.mke4_tls_key_input_pem
+  mke4_tls_present = local.mke4_tls_enabled && (
+    local.mke4_tls_use_acme ||
+    local.mke4_tls_use_existing ||
+    (length(trimspace(local.mke4_tls_cert_input_pem)) > 0 &&
+    length(trimspace(local.mke4_tls_key_input_pem)) > 0)
+  )
+  mke4_tls_write_files = (
+    local.mke4_tls_use_acme ||
+    (length(trimspace(local.mke4_tls_cert_input_pem)) > 0 &&
+    length(trimspace(local.mke4_tls_key_input_pem)) > 0)
+  )
 
   ingress_tls = var.ingress_tls
 
   ingress_tls_enabled = try(tobool(local.ingress_tls.enabled), false)
 
-  ingress_tls_use_acme = (
+  ingress_tls_wants_acme = (
     local.ingress_tls_enabled &&
     try(tobool(local.ingress_tls.use_acme), false)
   )
 
   ingress_tls_common_name = local.ingress_tls_enabled ? coalesce(
     try(local.ingress_tls.common_name, null),
-    local.cloudflare_settings_map.record_name_ingress
+    local.cloudflare_record_name_ingress
   ) : null
 
-  ingress_tls_dir       = "${path.module}/artifacts/tlscerts/ingress"
+  ingress_tls_dir       = local.ingress_tls_enabled ? "${local.artifacts_dir}/tlscerts/ingress/${local.ingress_tls_common_name}" : "${local.artifacts_dir}/tlscerts/ingress"
   ingress_tls_ca_file   = "${local.ingress_tls_dir}/ca.pem"
   ingress_tls_cert_file = "${local.ingress_tls_dir}/server.pem"
   ingress_tls_key_file  = "${local.ingress_tls_dir}/key.pem"
+
+  ingress_tls_use_existing   = local.ingress_tls_wants_acme && try(data.external.ingress_tls_existing[0].result.valid == "true", false)
+  ingress_tls_use_acme       = local.ingress_tls_wants_acme && !local.ingress_tls_use_existing
+  ingress_tls_ca_input_pem   = try(local.ingress_tls.ca_pem != null ? local.ingress_tls.ca_pem : "", "")
+  ingress_tls_cert_input_pem = try(local.ingress_tls.cert_pem != null ? local.ingress_tls.cert_pem : "", "")
+  ingress_tls_key_input_pem  = try(local.ingress_tls.key_pem != null ? local.ingress_tls.key_pem : "", "")
+  ingress_tls_ca_pem         = local.ingress_tls_use_existing ? (fileexists(local.ingress_tls_ca_file) ? file(local.ingress_tls_ca_file) : "") : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].issuer_pem, "") : local.ingress_tls_ca_input_pem
+  ingress_tls_cert_pem       = local.ingress_tls_use_existing ? file(local.ingress_tls_cert_file) : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].certificate_pem, "") : local.ingress_tls_cert_input_pem
+  ingress_tls_key_pem        = local.ingress_tls_use_existing ? file(local.ingress_tls_key_file) : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].private_key_pem, "") : local.ingress_tls_key_input_pem
+  ingress_tls_write_files = (
+    local.ingress_tls_use_acme ||
+    (length(trimspace(local.ingress_tls_cert_input_pem)) > 0 &&
+    length(trimspace(local.ingress_tls_key_input_pem)) > 0)
+  )
 
   msr_tls = var.msr_tls
 
   msr_tls_enabled = try(tobool(local.msr_tls.enabled), false)
 
-  msr_tls_use_acme = (
+  msr_tls_wants_acme = (
     local.msr_tls_enabled &&
     try(tobool(local.msr_tls.use_acme), false)
   )
 
   msr_tls_common_name = local.msr_tls_enabled ? coalesce(
     try(local.msr_tls.common_name, null),
-    "msr.samkhya.cloud"
+    local.msr_domain
   ) : null
 
-  msr_tls_dir       = "${path.module}/artifacts/tlscerts/msr"
+  msr_tls_dir       = local.msr_tls_enabled ? "${local.artifacts_dir}/tlscerts/msr/${local.msr_tls_common_name}" : "${local.artifacts_dir}/tlscerts/msr"
   msr_tls_ca_file   = "${local.msr_tls_dir}/ca.pem"
   msr_tls_cert_file = "${local.msr_tls_dir}/server.pem"
   msr_tls_key_file  = "${local.msr_tls_dir}/key.pem"
+
+  msr_tls_use_existing   = local.msr_tls_wants_acme && try(data.external.msr_tls_existing[0].result.valid == "true", false)
+  msr_tls_use_acme       = local.msr_tls_wants_acme && !local.msr_tls_use_existing
+  msr_tls_ca_input_pem   = try(local.msr_tls.ca_pem != null ? local.msr_tls.ca_pem : "", "")
+  msr_tls_cert_input_pem = try(local.msr_tls.cert_pem != null ? local.msr_tls.cert_pem : "", "")
+  msr_tls_key_input_pem  = try(local.msr_tls.key_pem != null ? local.msr_tls.key_pem : "", "")
+  msr_tls_ca_pem         = local.msr_tls_use_existing ? (fileexists(local.msr_tls_ca_file) ? file(local.msr_tls_ca_file) : "") : local.msr_tls_use_acme ? try(acme_certificate.msr[0].issuer_pem, "") : local.msr_tls_ca_input_pem
+  msr_tls_cert_pem       = local.msr_tls_use_existing ? file(local.msr_tls_cert_file) : local.msr_tls_use_acme ? try(acme_certificate.msr[0].certificate_pem, "") : local.msr_tls_cert_input_pem
+  msr_tls_key_pem        = local.msr_tls_use_existing ? file(local.msr_tls_key_file) : local.msr_tls_use_acme ? try(acme_certificate.msr[0].private_key_pem, "") : local.msr_tls_key_input_pem
+  msr_tls_write_files = (
+    local.msr_tls_use_acme ||
+    (length(trimspace(local.msr_tls_cert_input_pem)) > 0 &&
+    length(trimspace(local.msr_tls_key_input_pem)) > 0)
+  )
 
   primary_manager_address = local.san_override != null ? local.san_override : (
     local.aws_manager_lb_dns != null ? local.aws_manager_lb_dns :
@@ -412,21 +526,22 @@ locals {
   )
 
   launchpad_context = {
-    apiVersion        = "launchpad.mirantis.com/mke/v1.3"
-    kind              = local.launchpad_kind
-    cluster_name      = local.cluster_name
-    admin_username    = var.admin_username
-    admin_password    = var.admin_password
-    mke_version       = var.mke3_version
-    msr_version       = var.msr_version
-    mcr_version       = var.mcr_version
-    enable_msr        = var.enable_msr
-    orchestrator_flag = "--default-node-orchestrator=kubernetes"
-    san               = local.primary_manager_address
-    msr_external_url  = local.msr_endpoint
-    mke_ca_cert_path  = local.mke3_tls_ca_path
-    mke_cert_path     = local.mke3_tls_cert_path
-    mke_key_path      = local.mke3_tls_key_path
+    apiVersion           = "launchpad.mirantis.com/mke/v1.3"
+    kind                 = local.launchpad_kind
+    cluster_name         = local.cluster_name
+    admin_username       = var.admin_username
+    admin_password       = var.admin_password
+    mke_version          = var.mke3_version
+    msr_version          = var.msr_version
+    mcr_version          = var.mcr_version
+    enable_msr           = var.enable_msr
+    orchestrator_flag    = "--default-node-orchestrator=kubernetes"
+    san                  = local.primary_manager_address
+    msr_external_url     = local.msr_endpoint
+    mke_ca_cert_path     = local.mke3_tls_ca_path
+    mke_cert_path        = local.mke3_tls_cert_path
+    mke_key_path         = local.mke3_tls_key_path
+    mke3_tls_common_name = local.mke3_tls_common_name
     managers = [for host in local.managers : {
       public_ip         = host.public_ip
       ssh_user          = host.ssh_user
@@ -469,15 +584,9 @@ locals {
 
   mkectl_version = startswith(lower(var.mke4_version), "v") ? var.mke4_version : "v${var.mke4_version}"
 
-  mkectl_cloud_provider = try(local.all_hosts[0].provider, "aws")
-  mkectl_network_cidr   = local.aws_enabled ? local.aws_settings_map.vpc_cidr : "192.168.0.0/16"
-  mkectl_api_external_host = coalesce(
-    local.aws_api_lb_dns,
-    local.hetzner_api_lb_ip,
-    local.aws_manager_lb_dns,
-    local.hetzner_manager_lb_ip,
-    local.primary_manager_address
-  )
+  mkectl_cloud_provider    = try(local.all_hosts[0].provider, "aws")
+  mkectl_network_cidr      = local.aws_enabled ? local.aws_settings_map.vpc_cidr : "192.168.0.0/16"
+  mkectl_api_external_host = local.mke4_domain
   mkectl_upgrade_external_host = coalesce(
     local.aws_mke4_ui_lb_dns,
     local.hetzner_mke4_ui_lb_ip,
@@ -510,9 +619,14 @@ locals {
     cloud_provider = local.mkectl_cloud_provider
     network_cidr   = local.mkectl_network_cidr
     api_server = {
-      external_address = local.mkectl_upgrade_external_host
+      external_address = local.mke4_domain
       sans             = local.mkectl_sans
     }
+    mke4_tls_present     = local.mke4_tls_present
+    mke4_tls_common_name = local.mke4_tls_common_name
+    mke4_tls_ca_pem      = local.mke4_tls_ca_pem
+    mke4_tls_cert_pem    = local.mke4_tls_cert_pem
+    mke4_tls_key_pem     = local.mke4_tls_key_pem
   }
 
   mkectl_upgrade_context = {
@@ -592,11 +706,11 @@ MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT='${local.mkectl_upgrade_context.gateway_ht
 }
 
 resource "cloudflare_record" "aws_manager" {
-  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_settings_map.record_name_manager != null &&
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_record_name_manager != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id
-  name            = local.cloudflare_settings_map.record_name_manager
+  name            = local.cloudflare_record_name_manager
   type            = "CNAME"
   content         = local.aws_manager_lb_dns
   ttl             = 300
@@ -609,11 +723,11 @@ resource "cloudflare_record" "aws_manager" {
 }
 
 resource "cloudflare_record" "aws_ingress" {
-  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_settings_map.record_name_ingress != null &&
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_record_name_ingress != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id
-  name            = local.cloudflare_settings_map.record_name_ingress
+  name            = local.cloudflare_record_name_ingress
   type            = "CNAME"
   content         = local.aws_ingress_lb_dns
   ttl             = 300
@@ -626,11 +740,11 @@ resource "cloudflare_record" "aws_ingress" {
 }
 
 resource "cloudflare_record" "aws_mke4_ui" {
-  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_settings_map.record_name_mke4_ui != null &&
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_record_name_mke4_ui != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id
-  name            = local.cloudflare_settings_map.record_name_mke4_ui
+  name            = local.cloudflare_record_name_mke4_ui
   type            = "CNAME"
   content         = local.aws_mke4_ui_lb_dns
   ttl             = 300
@@ -660,11 +774,11 @@ resource "cloudflare_record" "hetzner_default" {
 }
 
 resource "cloudflare_record" "hetzner_manager" {
-  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name_manager != null &&
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_record_name_manager != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id
-  name            = local.cloudflare_settings_map.record_name_manager
+  name            = local.cloudflare_record_name_manager
   type            = "A"
   content         = local.hetzner_manager_lb_ip
   ttl             = 300
@@ -677,11 +791,11 @@ resource "cloudflare_record" "hetzner_manager" {
 }
 
 resource "cloudflare_record" "hetzner_ingress" {
-  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name_ingress != null &&
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_record_name_ingress != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id
-  name            = local.cloudflare_settings_map.record_name_ingress
+  name            = local.cloudflare_record_name_ingress
   type            = "A"
   content         = local.hetzner_ingress_lb_ip
   ttl             = 300
@@ -694,11 +808,11 @@ resource "cloudflare_record" "hetzner_ingress" {
 }
 
 resource "cloudflare_record" "hetzner_mke4_ui" {
-  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name_mke4_ui != null &&
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_record_name_mke4_ui != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id
-  name            = local.cloudflare_settings_map.record_name_mke4_ui
+  name            = local.cloudflare_record_name_mke4_ui
   type            = "A"
   content         = local.hetzner_mke4_ui_lb_ip
   ttl             = 300

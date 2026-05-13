@@ -4,6 +4,36 @@ variable "cluster_name" {
   default     = "ps-mke"
 }
 
+variable "root_domain" {
+  description = "Primary DNS domain used for application hostnames."
+  type        = string
+  default     = "samkhya.cloud"
+}
+
+variable "app_domain_mke3" {
+  description = "Hostname prefix for MKE3 services."
+  type        = string
+  default     = "mke3"
+}
+
+variable "app_domain_mke4" {
+  description = "Hostname prefix for MKE4 services."
+  type        = string
+  default     = "mke4"
+}
+
+variable "app_domain_ingress" {
+  description = "Hostname prefix for ingress services."
+  type        = string
+  default     = "ingress"
+}
+
+variable "app_domain_msr" {
+  description = "Hostname prefix for MSR services."
+  type        = string
+  default     = "msr"
+}
+
 variable "admin_username" {
   description = "Username for both Launchpad and mkectl administrative users."
   type        = string
@@ -75,6 +105,12 @@ variable "san_override" {
   description = "Optional SAN override for Launchpad install flags. Defaults to the manager LB or first manager."
   type        = string
   default     = null
+}
+
+variable "tls_reuse_min_validity_hours" {
+  description = "Minimum remaining certificate validity required before reusing an existing certificate from artifacts/tlscerts."
+  type        = number
+  default     = 168
 }
 
 variable "mke3_tls" {
@@ -249,4 +285,3 @@ variable "vsphere_settings" {
   })
   default = {}
 }
-

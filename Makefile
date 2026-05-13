@@ -13,6 +13,7 @@ apply:
 	terraform apply -auto-approve
 
 destroy:
+	@terraform state list | rg '^acme_certificate\.' | xargs -r terraform state rm
 	terraform destroy
 
 mke3:
@@ -50,4 +51,3 @@ nuke-it:
 		ssh -o StrictHostKeyChecking=no -i artifacts/ssh/ps-mke-aws.pem ec2-user@$$i 'bash -s' < ./artifacts/scripts/cleanup_masternode_script.sh; \
 	done
 	@echo "MKE cleanup complete!"
-
