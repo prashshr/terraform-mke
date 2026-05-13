@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 init:
 	terraform init
-	python3 artifacts/scripts/render_hosts_from_state.py
+	#python3 artifacts/scripts/render_hosts_from_state.py
 
 plan:
 	terraform plan
@@ -17,6 +17,7 @@ destroy:
 
 mke3:
 	launchpad apply -c artifacts/configs/launchpad.yaml --debug
+	launchpad client-config -c artifacts/configs/launchpad.yaml
 
 mke4:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))

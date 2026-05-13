@@ -1,12 +1,239 @@
 resource "null_resource" "artifacts_dirs" {
   provisioner "local-exec" {
-    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\""
+    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${path.module}/artifacts/tlscerts/mke3\" \"${path.module}/artifacts/tlscerts/mke4\" \"${path.module}/artifacts/tlscerts/ingress\" \"${path.module}/artifacts/tlscerts/msr\""
   }
 
   triggers = {
-    ssh_dir    = local.ssh_dir
-    config_dir = local.config_dir
+    ssh_dir         = local.ssh_dir
+    config_dir      = local.config_dir
+    tls_dir_mke3    = "${path.module}/artifacts/tlscerts/mke3"
+    tls_dir_ingress = "${path.module}/artifacts/tlscerts/ingress"
+    tls_dir_msr     = "${path.module}/artifacts/tlscerts/msr"
+    tls_dir_mke4    = "${path.module}/artifacts/tlscerts/mke4"
   }
+}
+
+resource "tls_private_key" "mke3_acme_account" {
+  count = local.mke3_tls_use_acme ? 1 : 0
+
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "acme_registration" "mke3" {
+  count = local.mke3_tls_use_acme ? 1 : 0
+
+  account_key_pem = tls_private_key.mke3_acme_account[0].private_key_pem
+  email_address   = try(var.mke3_tls.email, null)
+}
+
+resource "acme_certificate" "mke3" {
+  count = local.mke3_tls_use_acme ? 1 : 0
+
+  account_key_pem = acme_registration.mke3[0].account_key_pem
+  common_name     = local.mke3_tls_common_name
+
+  dns_challenge {
+    provider = "cloudflare"
+    config = {
+      CLOUDFLARE_API_TOKEN = local.cloudflare_api_token
+    }
+  }
+}
+
+resource "local_file" "mke3_tls_ca" {
+  count = local.mke3_tls_enabled && (
+    local.mke3_tls_use_acme || try(length(trimspace(coalesce(var.mke3_tls.ca_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.mke3_tls_ca_file
+  content  = local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].issuer_pem, "") : try(var.mke3_tls.ca_pem, "")
+}
+
+resource "local_file" "mke3_tls_cert" {
+  count = local.mke3_tls_enabled && (
+    local.mke3_tls_use_acme || try(length(trimspace(coalesce(var.mke3_tls.cert_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.mke3_tls_cert_file
+  content  = local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].certificate_pem, "") : try(var.mke3_tls.cert_pem, "")
+}
+
+resource "local_file" "mke3_tls_key" {
+  count = local.mke3_tls_enabled && (
+    local.mke3_tls_use_acme || try(length(trimspace(coalesce(var.mke3_tls.key_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.mke3_tls_key_file
+  content  = local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].private_key_pem, "") : try(var.mke3_tls.key_pem, "")
+}
+
+resource "tls_private_key" "mke4_acme_account" {
+  count = local.mke4_tls_use_acme ? 1 : 0
+
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "acme_registration" "mke4" {
+  count = local.mke4_tls_use_acme ? 1 : 0
+
+  account_key_pem = tls_private_key.mke4_acme_account[0].private_key_pem
+  email_address   = try(var.mke4_tls.email, null)
+}
+
+resource "acme_certificate" "mke4" {
+  count = local.mke4_tls_use_acme ? 1 : 0
+
+  account_key_pem = acme_registration.mke4[0].account_key_pem
+  common_name     = local.mke4_tls_common_name
+
+  dns_challenge {
+    provider = "cloudflare"
+
+    config = {
+      CLOUDFLARE_API_TOKEN = local.cloudflare_api_token
+    }
+  }
+}
+
+resource "local_file" "mke4_tls_ca" {
+  count = local.mke4_tls_enabled && (
+    local.mke4_tls_use_acme || try(length(trimspace(coalesce(var.mke4_tls.ca_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.mke4_tls_ca_file
+  content  = local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].issuer_pem, "") : try(var.mke4_tls.ca_pem, "")
+}
+
+resource "local_file" "mke4_tls_cert" {
+  count = local.mke4_tls_enabled && (
+    local.mke4_tls_use_acme || try(length(trimspace(coalesce(var.mke4_tls.cert_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.mke4_tls_cert_file
+  content  = local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].certificate_pem, "") : try(var.mke4_tls.cert_pem, "")
+}
+
+resource "local_file" "mke4_tls_key" {
+  count = local.mke4_tls_enabled && (
+    local.mke4_tls_use_acme || try(length(trimspace(coalesce(var.mke4_tls.key_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.mke4_tls_key_file
+  content  = local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].private_key_pem, "") : try(var.mke4_tls.key_pem, "")
+}
+
+resource "tls_private_key" "ingress_acme_account" {
+  count = local.ingress_tls_use_acme ? 1 : 0
+
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "acme_registration" "ingress" {
+  count = local.ingress_tls_use_acme ? 1 : 0
+
+  account_key_pem = tls_private_key.ingress_acme_account[0].private_key_pem
+  email_address   = try(var.ingress_tls.email, null)
+}
+
+resource "acme_certificate" "ingress" {
+  count = local.ingress_tls_use_acme ? 1 : 0
+
+  account_key_pem = acme_registration.ingress[0].account_key_pem
+  common_name     = local.ingress_tls_common_name
+
+  dns_challenge {
+    provider = "cloudflare"
+
+    config = {
+      CLOUDFLARE_API_TOKEN = local.cloudflare_api_token
+    }
+  }
+}
+
+resource "local_file" "ingress_tls_ca" {
+  count = local.ingress_tls_enabled && (
+    local.ingress_tls_use_acme || try(length(trimspace(coalesce(var.ingress_tls.ca_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.ingress_tls_ca_file
+  content  = local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].issuer_pem, "") : try(var.ingress_tls.ca_pem, "")
+}
+
+resource "local_file" "ingress_tls_cert" {
+  count = local.ingress_tls_enabled && (
+    local.ingress_tls_use_acme || try(length(trimspace(coalesce(var.ingress_tls.cert_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.ingress_tls_cert_file
+  content  = local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].certificate_pem, "") : try(var.ingress_tls.cert_pem, "")
+}
+
+resource "local_file" "ingress_tls_key" {
+  count = local.ingress_tls_enabled && (
+    local.ingress_tls_use_acme || try(length(trimspace(coalesce(var.ingress_tls.key_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.ingress_tls_key_file
+  content  = local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].private_key_pem, "") : try(var.ingress_tls.key_pem, "")
+}
+
+resource "tls_private_key" "msr_acme_account" {
+  count = local.msr_tls_use_acme ? 1 : 0
+
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "acme_registration" "msr" {
+  count = local.msr_tls_use_acme ? 1 : 0
+
+  account_key_pem = tls_private_key.msr_acme_account[0].private_key_pem
+  email_address   = try(var.msr_tls.email, null)
+}
+
+resource "acme_certificate" "msr" {
+  count = local.msr_tls_use_acme ? 1 : 0
+
+  account_key_pem = acme_registration.msr[0].account_key_pem
+  common_name     = local.msr_tls_common_name
+
+  dns_challenge {
+    provider = "cloudflare"
+
+    config = {
+      CLOUDFLARE_API_TOKEN = local.cloudflare_api_token
+    }
+  }
+}
+
+resource "local_file" "msr_tls_ca" {
+  count = local.msr_tls_enabled && (
+    local.msr_tls_use_acme || try(length(trimspace(coalesce(var.msr_tls.ca_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.msr_tls_ca_file
+  content  = local.msr_tls_use_acme ? try(acme_certificate.msr[0].issuer_pem, "") : try(var.msr_tls.ca_pem, "")
+}
+
+resource "local_file" "msr_tls_cert" {
+  count = local.msr_tls_enabled && (
+    local.msr_tls_use_acme || try(length(trimspace(coalesce(var.msr_tls.cert_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.msr_tls_cert_file
+  content  = local.msr_tls_use_acme ? try(acme_certificate.msr[0].certificate_pem, "") : try(var.msr_tls.cert_pem, "")
+}
+
+resource "local_file" "msr_tls_key" {
+  count = local.msr_tls_enabled && (
+    local.msr_tls_use_acme || try(length(trimspace(coalesce(var.msr_tls.key_pem, ""))) > 0, false)
+  ) ? 1 : 0
+
+  filename = local.msr_tls_key_file
+  content  = local.msr_tls_use_acme ? try(acme_certificate.msr[0].private_key_pem, "") : try(var.msr_tls.key_pem, "")
 }
 
 module "aws" {
@@ -49,6 +276,14 @@ module "hetzner" {
   depends_on = [null_resource.artifacts_dirs]
 }
 
+data "cloudflare_zones" "lookup" {
+  count = local.cloudflare_enabled && local.cloudflare_settings_map.zone_name != "" ? 1 : 0
+
+  filter {
+    name = local.cloudflare_settings_map.zone_name
+  }
+}
+
 locals {
   aws_hosts             = try(module.aws[0].hosts, [])
   hetzner_hosts         = try(module.hetzner[0].hosts, [])
@@ -64,7 +299,6 @@ locals {
   hetzner_api_lb_ip     = try(module.hetzner[0].api_lb_ipv4, null)
   hetzner_mke4_ui_lb_ip = try(module.hetzner[0].mke4_ui_lb_ipv4, null)
   hetzner_msr_lb_ip     = try(module.hetzner[0].msr_lb_ipv4, null)
-  cloudflare_target_ip  = local.cloudflare_enabled ? try(coalesce(local.hetzner_ingress_lb_ip, local.hetzner_manager_lb_ip), null) : null
 
   all_hosts = concat(local.aws_hosts, local.hetzner_hosts, local.azure_hosts, local.vsphere_hosts)
 
@@ -77,6 +311,92 @@ locals {
     trimspace(var.san_override) :
     null
   )
+
+  mke3_tls = var.mke3_tls
+
+  mke3_tls_enabled = try(tobool(local.mke3_tls.enabled), false)
+
+  mke3_tls_use_acme = (
+    local.mke3_tls_enabled &&
+    try(tobool(local.mke3_tls.use_acme), false)
+  )
+
+  mke3_tls_common_name = local.mke3_tls_enabled ? coalesce(
+    try(local.mke3_tls.common_name, null),
+    local.cloudflare_settings_map.record_name_manager
+  ) : null
+
+  mke3_tls_email = try(local.mke3_tls.email, null)
+
+  mke3_tls_directory_url = coalesce(
+    try(local.mke3_tls.acme_directory_url, null),
+    "https://acme-v02.api.letsencrypt.org/directory"
+  )
+
+  mke3_tls_dir       = "${path.module}/artifacts/tlscerts/mke3"
+  mke3_tls_ca_file   = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/ca.pem" : null
+  mke3_tls_cert_file = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/server.pem" : null
+  mke3_tls_key_file  = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/key.pem" : null
+  mke3_tls_ca_path   = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/ca.pem" : null
+  mke3_tls_cert_path = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/server.pem" : null
+  mke3_tls_key_path  = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/key.pem" : null
+
+  mke4_tls = var.mke4_tls
+
+  mke4_tls_enabled = try(tobool(local.mke4_tls.enabled), false)
+
+  mke4_tls_use_acme = (
+    local.mke4_tls_enabled &&
+    try(tobool(local.mke4_tls.use_acme), false)
+  )
+
+  mke4_tls_common_name = local.mke4_tls_enabled ? coalesce(
+    try(local.mke4_tls.common_name, null),
+    local.cloudflare_settings_map.record_name_mke4_ui
+  ) : null
+
+  mke4_tls_dir       = "${path.module}/artifacts/tlscerts/mke4"
+  mke4_tls_ca_file   = "${local.mke4_tls_dir}/ca.pem"
+  mke4_tls_cert_file = "${local.mke4_tls_dir}/server.pem"
+  mke4_tls_key_file  = "${local.mke4_tls_dir}/key.pem"
+
+  ingress_tls = var.ingress_tls
+
+  ingress_tls_enabled = try(tobool(local.ingress_tls.enabled), false)
+
+  ingress_tls_use_acme = (
+    local.ingress_tls_enabled &&
+    try(tobool(local.ingress_tls.use_acme), false)
+  )
+
+  ingress_tls_common_name = local.ingress_tls_enabled ? coalesce(
+    try(local.ingress_tls.common_name, null),
+    local.cloudflare_settings_map.record_name_ingress
+  ) : null
+
+  ingress_tls_dir       = "${path.module}/artifacts/tlscerts/ingress"
+  ingress_tls_ca_file   = "${local.ingress_tls_dir}/ca.pem"
+  ingress_tls_cert_file = "${local.ingress_tls_dir}/server.pem"
+  ingress_tls_key_file  = "${local.ingress_tls_dir}/key.pem"
+
+  msr_tls = var.msr_tls
+
+  msr_tls_enabled = try(tobool(local.msr_tls.enabled), false)
+
+  msr_tls_use_acme = (
+    local.msr_tls_enabled &&
+    try(tobool(local.msr_tls.use_acme), false)
+  )
+
+  msr_tls_common_name = local.msr_tls_enabled ? coalesce(
+    try(local.msr_tls.common_name, null),
+    "msr.samkhya.cloud"
+  ) : null
+
+  msr_tls_dir       = "${path.module}/artifacts/tlscerts/msr"
+  msr_tls_ca_file   = "${local.msr_tls_dir}/ca.pem"
+  msr_tls_cert_file = "${local.msr_tls_dir}/server.pem"
+  msr_tls_key_file  = "${local.msr_tls_dir}/key.pem"
 
   primary_manager_address = local.san_override != null ? local.san_override : (
     local.aws_manager_lb_dns != null ? local.aws_manager_lb_dns :
@@ -104,6 +424,9 @@ locals {
     orchestrator_flag = "--default-node-orchestrator=kubernetes"
     san               = local.primary_manager_address
     msr_external_url  = local.msr_endpoint
+    mke_ca_cert_path  = local.mke3_tls_ca_path
+    mke_cert_path     = local.mke3_tls_cert_path
+    mke_key_path      = local.mke3_tls_key_path
     managers = [for host in local.managers : {
       public_ip         = host.public_ip
       ssh_user          = host.ssh_user
@@ -268,27 +591,145 @@ MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT='${local.mkectl_upgrade_context.gateway_ht
   depends_on = [null_resource.artifacts_dirs]
 }
 
-resource "cloudflare_record" "hetzner_lb_a" {
-  count = local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_target_ip != null ? 1 : 0
+resource "cloudflare_record" "aws_manager" {
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_settings_map.record_name_manager != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
-  zone_id         = local.cloudflare_settings_map.zone_id
-  name            = local.cloudflare_settings_map.record_name
-  type            = "A"
-  content         = coalesce(local.cloudflare_target_ip, "0.0.0.0")
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name_manager
+  type            = "CNAME"
+  content         = local.aws_manager_lb_dns
   ttl             = 300
   proxied         = false
   allow_overwrite = true
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
-
-  depends_on = [module.hetzner]
 }
 
-check "cloudflare_target_ip_present" {
+resource "cloudflare_record" "aws_ingress" {
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_settings_map.record_name_ingress != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name_ingress
+  type            = "CNAME"
+  content         = local.aws_ingress_lb_dns
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "aws_mke4_ui" {
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_settings_map.record_name_mke4_ui != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name_mke4_ui
+  type            = "CNAME"
+  content         = local.aws_mke4_ui_lb_dns
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "hetzner_default" {
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name
+  type            = "A"
+  content         = local.hetzner_ingress_lb_ip
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "hetzner_manager" {
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name_manager != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name_manager
+  type            = "A"
+  content         = local.hetzner_manager_lb_ip
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "hetzner_ingress" {
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name_ingress != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name_ingress
+  type            = "A"
+  content         = local.hetzner_ingress_lb_ip
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "hetzner_mke4_ui" {
+  count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name_mke4_ui != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_settings_map.record_name_mke4_ui
+  type            = "A"
+  content         = local.hetzner_mke4_ui_lb_ip
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "extra" {
+  count = (local.cloudflare_enabled && try(length(trimspace(local.cloudflare_zone_id)) > 0, false) &&
+  local.cloudflare_zone_id != "placeholder-zone-id") ? length(var.cloudflare_records) : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = var.cloudflare_records[count.index].name
+  type            = var.cloudflare_records[count.index].type
+  content         = var.cloudflare_records[count.index].content
+  ttl             = 300
+  proxied         = coalesce(var.cloudflare_records[count.index].proxied, false)
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+check "cloudflare_zone_id_present" {
   assert {
-    condition     = !local.cloudflare_enabled || !local.hetzner_enabled || local.cloudflare_target_ip != null
-    error_message = "Cloudflare DNS is enabled but no Hetzner load balancer IP was found."
+    condition     = !local.cloudflare_enabled || try(length(trimspace(local.cloudflare_zone_id)) > 0, false)
+    error_message = "Cloudflare is enabled but no zone_id or zone_name resolved to a Cloudflare zone."
   }
 }

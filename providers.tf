@@ -29,5 +29,14 @@ provider "cloudflare" {
 }
 
 provider "tls" {}
+provider "acme" {
+  server_url = coalesce(
+    try(var.mke3_tls.acme_directory_url, null),
+    try(var.mke4_tls.acme_directory_url, null),
+    try(var.ingress_tls.acme_directory_url, null),
+    try(var.msr_tls.acme_directory_url, null),
+    "https://acme-v02.api.letsencrypt.org/directory"
+  )
+}
 provider "local" {}
 provider "null" {}

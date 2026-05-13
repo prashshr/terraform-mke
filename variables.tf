@@ -77,6 +77,66 @@ variable "san_override" {
   default     = null
 }
 
+variable "mke3_tls" {
+  description = "Optional TLS certificate configuration for MKE3 direct installation."
+  type = object({
+    enabled            = optional(bool)
+    use_acme           = optional(bool)
+    common_name        = optional(string)
+    email              = optional(string)
+    acme_directory_url = optional(string)
+    cert_pem           = optional(string)
+    key_pem            = optional(string)
+    ca_pem             = optional(string)
+  })
+  default = {}
+}
+
+variable "mke4_tls" {
+  description = "Optional TLS certificate configuration for MKE4 direct installation."
+  type = object({
+    enabled            = optional(bool)
+    use_acme           = optional(bool)
+    common_name        = optional(string)
+    email              = optional(string)
+    acme_directory_url = optional(string)
+    cert_pem           = optional(string)
+    key_pem            = optional(string)
+    ca_pem             = optional(string)
+  })
+  default = {}
+}
+
+variable "ingress_tls" {
+  description = "TLS certificate configuration for ingress."
+  type = object({
+    enabled            = optional(bool)
+    use_acme           = optional(bool)
+    common_name        = optional(string)
+    email              = optional(string)
+    acme_directory_url = optional(string)
+    cert_pem           = optional(string)
+    key_pem            = optional(string)
+    ca_pem             = optional(string)
+  })
+  default = {}
+}
+
+variable "msr_tls" {
+  description = "TLS certificate configuration for MSR."
+  type = object({
+    enabled            = optional(bool)
+    use_acme           = optional(bool)
+    common_name        = optional(string)
+    email              = optional(string)
+    acme_directory_url = optional(string)
+    cert_pem           = optional(string)
+    key_pem            = optional(string)
+    ca_pem             = optional(string)
+  })
+  default = {}
+}
+
 variable "mkectl_binary" {
   description = "mkectl binary name or path to execute after configs are rendered."
   type        = string
@@ -123,14 +183,29 @@ variable "hetzner_settings" {
 }
 
 variable "cloudflare_settings" {
-  description = "Cloudflare DNS settings for the Hetzner manager/MKE4 LB."
+  description = "Cloudflare DNS settings used for managed DNS records."
   type = object({
-    enabled     = optional(bool)
-    zone_id     = optional(string)
-    record_name = optional(string)
-    api_token   = optional(string)
+    enabled             = optional(bool)
+    zone_id             = optional(string)
+    zone_name           = optional(string)
+    record_name         = optional(string)
+    record_name_manager = optional(string)
+    record_name_ingress = optional(string)
+    record_name_mke4_ui = optional(string)
+    api_token           = optional(string)
   })
   default = {}
+}
+
+variable "cloudflare_records" {
+  description = "Additional Cloudflare records to create in the configured zone."
+  type = list(object({
+    name    = string
+    type    = string
+    content = string
+    proxied = optional(bool, false)
+  }))
+  default = []
 }
 
 variable "azure_settings" {
@@ -174,3 +249,4 @@ variable "vsphere_settings" {
   })
   default = {}
 }
+

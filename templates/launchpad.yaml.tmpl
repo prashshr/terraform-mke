@@ -38,8 +38,19 @@ spec:
     installFlags:
       - ${orchestrator_flag}
       - --force-minimums
+      # - --dns=1.1.1.1
+      # - --kube-apiserver-port=8443
+      # - --nodeport-range=30000-39767
+      # - --pod-cidr=10.244.0.0/16
+      # - --service-cluster-ip-range=10.97.0.0/16
+      # - --ingress-controller
 %{ if san != null ~}
       - --san=${san}
+%{ endif ~}
+%{ if mke_ca_cert_path != null ~}
+    caCertPath: ${mke_ca_cert_path}
+    certPath: ${mke_cert_path}
+    keyPath: ${mke_key_path}
 %{ endif ~}
   msr:
 %{ if enable_msr ~}
@@ -54,7 +65,7 @@ spec:
 %{ endif ~}
   mcr:
     version: ${mcr_version}
-    channel: stable
+    channel: stable-${mcr_version}
     repoURL: https://repos.mirantis.com
   cluster:
     prune: true

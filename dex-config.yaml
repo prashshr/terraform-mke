@@ -8,7 +8,7 @@ grpc:
   tlsCert: /etc/dex/certs/grpc/tls.crt
   tlsClientCA: /etc/dex/certs/grpc/ca.crt
   tlsKey: /etc/dex/certs/grpc/tls.key
-issuer: https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com/dex
+issuer: https://mke3.samkhya.cloud/dex
 staticClients:
 - id: mke-dashboard
   name: MKE Dashboard
@@ -16,11 +16,11 @@ staticClients:
   redirectURIs:
   - https://127.0.0.1:3000
   - https://localhost:3000
-  - https://3.253.197.175:34001
-  - https://3.253.197.175
-  - https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com
-  - https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com/
-  - https://ps-rhel94-mke4-1e181f9d4123cbbc.elb.eu-west-1.amazonaws.com/dex/callback
+  - https://63.35.233.182:34001
+  - https://63.35.233.182
+  - https://mke3.samkhya.cloud
+  - https://mke4.samkhya.cloud
+  - https://ps-rhel94-mke4-47891e9ec32a3347.elb.eu-west-1.amazonaws.com
 - id: mkectl
   name: mkectl
   public: true

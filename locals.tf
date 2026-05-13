@@ -95,11 +95,20 @@ locals {
   azure_settings_map      = merge(local.provider_defaults.azure, local.azure_settings_override)
   vsphere_settings_map    = merge(local.provider_defaults.vsphere, local.vsphere_settings_override)
 
-  aws_enabled        = try(local.aws_settings_map.enabled, false) && length(try(local.aws_settings_map.node_pools, [])) > 0
-  hetzner_enabled    = try(local.hetzner_settings_map.enabled, false) && length(try(local.hetzner_settings_map.node_pools, [])) > 0
-  azure_enabled      = try(local.azure_settings_map.enabled, false) && length(try(local.azure_settings_map.node_pools, [])) > 0
-  vsphere_enabled    = try(local.vsphere_settings_map.enabled, false) && length(try(local.vsphere_settings_map.node_pools, [])) > 0
-  cloudflare_enabled = try(local.cloudflare_settings_map.enabled, false) && try(length(trimspace(local.cloudflare_settings_map.zone_id)) > 0, false)
+  aws_enabled     = try(local.aws_settings_map.enabled, false) && length(try(local.aws_settings_map.node_pools, [])) > 0
+  hetzner_enabled = try(local.hetzner_settings_map.enabled, false) && length(try(local.hetzner_settings_map.node_pools, [])) > 0
+  azure_enabled   = try(local.azure_settings_map.enabled, false) && length(try(local.azure_settings_map.node_pools, [])) > 0
+  vsphere_enabled = try(local.vsphere_settings_map.enabled, false) && length(try(local.vsphere_settings_map.node_pools, [])) > 0
+  cloudflare_enabled = try(local.cloudflare_settings_map.enabled, false) && (
+    try(length(trimspace(local.cloudflare_settings_map.zone_id)) > 0, false) ||
+    try(length(trimspace(local.cloudflare_settings_map.zone_name)) > 0, false)
+  )
+
+  cloudflare_zone_id = local.cloudflare_enabled ? (
+    local.cloudflare_settings_map.zone_id != "" ? local.cloudflare_settings_map.zone_id :
+    local.cloudflare_settings_map.zone_name != "" ? try(data.cloudflare_zones.lookup[0].zones[0].id, "placeholder-zone-id") :
+    null
+  ) : null
 
   hetzner_env_token = local.hetzner_settings_map.enabled && fileexists("/proc/self/environ") ? (
     try(element([
@@ -130,10 +139,77 @@ locals {
     ], 0), null)
   ) : null
 
+  cloudflare_env_token_alt = local.cloudflare_enabled && fileexists("/proc/self/environ") ? (
+    try(element([
+      for entry in split("\u0000", file("/proc/self/environ")) :
+      trimprefix(entry, "CLOUDFLARE_API_TOKEN=")
+      if startswith(entry, "CLOUDFLARE_API_TOKEN=")
+    ], 0), null)
+  ) : null
+
   cloudflare_api_token = local.cloudflare_enabled ? coalesce(
     try(trimspace(local.cloudflare_env_token), null),
+    try(trimspace(local.cloudflare_env_token_alt), null),
     try(trimspace(local.cloudflare_settings_map.api_token), null)
   ) : null
+
+  aws_cloudflare_records = local.aws_enabled ? [
+    for rec in [
+      local.cloudflare_settings_map.record_name_manager != null && local.aws_manager_lb_dns != null ? {
+        name    = local.cloudflare_settings_map.record_name_manager
+        type    = "CNAME"
+        content = local.aws_manager_lb_dns
+        proxied = false
+      } : null,
+      local.cloudflare_settings_map.record_name_ingress != null && local.aws_ingress_lb_dns != null ? {
+        name    = local.cloudflare_settings_map.record_name_ingress
+        type    = "CNAME"
+        content = local.aws_ingress_lb_dns
+        proxied = false
+      } : null,
+      local.cloudflare_settings_map.record_name_mke4_ui != null && local.aws_mke4_ui_lb_dns != null ? {
+        name    = local.cloudflare_settings_map.record_name_mke4_ui
+        type    = "CNAME"
+        content = local.aws_mke4_ui_lb_dns
+        proxied = false
+      } : null
+    ] : rec if rec != null
+  ] : []
+
+  hetzner_cloudflare_records = local.hetzner_enabled ? [
+    for rec in [
+      local.cloudflare_settings_map.record_name != null && local.hetzner_ingress_lb_ip != null ? {
+        name    = local.cloudflare_settings_map.record_name
+        type    = "A"
+        content = local.hetzner_ingress_lb_ip
+        proxied = false
+      } : null,
+      local.cloudflare_settings_map.record_name_manager != null && local.hetzner_manager_lb_ip != null ? {
+        name    = local.cloudflare_settings_map.record_name_manager
+        type    = "A"
+        content = local.hetzner_manager_lb_ip
+        proxied = false
+      } : null,
+      local.cloudflare_settings_map.record_name_ingress != null && local.hetzner_ingress_lb_ip != null ? {
+        name    = local.cloudflare_settings_map.record_name_ingress
+        type    = "A"
+        content = local.hetzner_ingress_lb_ip
+        proxied = false
+      } : null,
+      local.cloudflare_settings_map.record_name_mke4_ui != null && local.hetzner_mke4_ui_lb_ip != null ? {
+        name    = local.cloudflare_settings_map.record_name_mke4_ui
+        type    = "A"
+        content = local.hetzner_mke4_ui_lb_ip
+        proxied = false
+      } : null
+    ] : rec if rec != null
+  ] : []
+
+  cloudflare_dns_records = concat(
+    local.hetzner_cloudflare_records,
+    local.aws_cloudflare_records,
+    var.cloudflare_records
+  )
 
   configured_node_pools = concat(
     local.aws_enabled ? local.aws_settings_map.node_pools : [],

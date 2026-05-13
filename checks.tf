@@ -15,6 +15,6 @@ check "hetzner_token_configured" {
 check "cloudflare_token_configured" {
   assert {
     condition     = !local.cloudflare_enabled || try(length(trimspace(local.cloudflare_api_token)), 0) > 0
-    error_message = "Set cloudflare_settings.api_token or CF_API_TOKEN before enabling Cloudflare."
+    error_message = "Set cloudflare_settings.api_token, CF_API_TOKEN, or CLOUDFLARE_API_TOKEN before enabling Cloudflare."
   }
 }
