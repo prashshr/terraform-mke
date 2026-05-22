@@ -20,7 +20,18 @@ variable "availability_zones" {
 
 variable "node_pools" {
   description = "List of node pool definitions specifying instance type, count, OS, and roles."
-  type        = list(any)
+  type = list(object({
+    name              = string
+    roles             = list(string)
+    os                = optional(string)
+    instance_type     = optional(string)
+    count             = optional(number)
+    root_volume_size  = optional(number)
+    subnet_index      = optional(number)
+    private_interface = optional(string)
+    labels            = optional(map(string))
+    metadata          = optional(map(string))
+  }))
 }
 
 variable "ssh_key_prefix" {

@@ -10,7 +10,16 @@ variable "location" {
 
 variable "node_pools" {
   description = "List of node pool definitions specifying server type, count, OS, and roles."
-  type        = list(any)
+  type = list(object({
+    name              = string
+    roles             = list(string)
+    os                = optional(string)
+    server_type       = optional(string)
+    count             = optional(number)
+    private_interface = optional(string)
+    labels            = optional(map(string))
+    metadata          = optional(map(string))
+  }))
 }
 
 variable "ssh_key_prefix" {
