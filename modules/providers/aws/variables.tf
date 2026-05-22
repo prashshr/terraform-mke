@@ -1,36 +1,45 @@
 variable "cluster_name" {
-  type = string
+  description = "Logical cluster name for tagging and resource naming."
+  type        = string
 }
 
 variable "resource_prefix" {
-  type = string
+  description = "Prefix applied to all AWS resource names for uniqueness."
+  type        = string
 }
 
 variable "vpc_cidr" {
-  type = string
+  description = "CIDR block for the cluster VPC."
+  type        = string
 }
 
 variable "availability_zones" {
-  type = list(string)
+  description = "List of AWS availability zones to deploy subnets into."
+  type        = list(string)
 }
 
 variable "node_pools" {
-  type = list(any)
+  description = "List of node pool definitions specifying instance type, count, OS, and roles."
+  type        = list(any)
 }
 
 variable "ssh_key_prefix" {
-  type = string
+  description = "Prefix for the SSH key pair name uploaded to AWS."
+  type        = string
 }
 
 variable "ssh_key_dir" {
-  type = string
+  description = "Local directory where the generated SSH private key is written."
+  type        = string
 }
 
 variable "tags" {
-  type    = map(string)
-  default = {}
+  description = "Additional tags applied to all AWS resources."
+  type        = map(string)
+  default     = {}
 }
 
 variable "mke4_ui_backend_port" {
-  type = number
+  description = "Backend target port for the MKE4 UI load balancer."
+  type        = number
 }

@@ -26,10 +26,6 @@ output "manager_lb_dns" {
   value = try(aws_lb.mke3[0].dns_name, null)
 }
 
-output "mke4_ingress_lb_dns" {
-  value = try(aws_lb.ingress[0].dns_name, null)
-}
-
 output "ingress_lb_dns" {
   value = try(aws_lb.ingress[0].dns_name, null)
 }

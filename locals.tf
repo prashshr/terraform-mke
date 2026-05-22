@@ -182,64 +182,6 @@ locals {
     try(trimspace(local.cloudflare_settings_map.api_token), null)
   ) : null
 
-  aws_cloudflare_records = local.aws_enabled ? [
-    for rec in [
-      local.cloudflare_record_name_manager != null && local.aws_manager_lb_dns != null ? {
-        name    = local.cloudflare_record_name_manager
-        type    = "CNAME"
-        content = local.aws_manager_lb_dns
-        proxied = false
-      } : null,
-      local.cloudflare_record_name_ingress != null && local.aws_ingress_lb_dns != null ? {
-        name    = local.cloudflare_record_name_ingress
-        type    = "CNAME"
-        content = local.aws_ingress_lb_dns
-        proxied = false
-      } : null,
-      local.cloudflare_record_name_mke4_ui != null && local.aws_mke4_ui_lb_dns != null ? {
-        name    = local.cloudflare_record_name_mke4_ui
-        type    = "CNAME"
-        content = local.aws_mke4_ui_lb_dns
-        proxied = false
-      } : null
-    ] : rec if rec != null
-  ] : []
-
-  hetzner_cloudflare_records = local.hetzner_enabled ? [
-    for rec in [
-      local.cloudflare_settings_map.record_name != null && local.hetzner_ingress_lb_ip != null ? {
-        name    = local.cloudflare_settings_map.record_name
-        type    = "A"
-        content = local.hetzner_ingress_lb_ip
-        proxied = false
-      } : null,
-      local.cloudflare_record_name_manager != null && local.hetzner_manager_lb_ip != null ? {
-        name    = local.cloudflare_record_name_manager
-        type    = "A"
-        content = local.hetzner_manager_lb_ip
-        proxied = false
-      } : null,
-      local.cloudflare_record_name_ingress != null && local.hetzner_ingress_lb_ip != null ? {
-        name    = local.cloudflare_record_name_ingress
-        type    = "A"
-        content = local.hetzner_ingress_lb_ip
-        proxied = false
-      } : null,
-      local.cloudflare_record_name_mke4_ui != null && local.hetzner_mke4_ui_lb_ip != null ? {
-        name    = local.cloudflare_record_name_mke4_ui
-        type    = "A"
-        content = local.hetzner_mke4_ui_lb_ip
-        proxied = false
-      } : null
-    ] : rec if rec != null
-  ] : []
-
-  cloudflare_dns_records = concat(
-    local.hetzner_cloudflare_records,
-    local.aws_cloudflare_records,
-    var.cloudflare_records
-  )
-
   configured_node_pools = concat(
     local.aws_enabled ? local.aws_settings_map.node_pools : [],
     local.hetzner_enabled ? local.hetzner_settings_map.node_pools : [],

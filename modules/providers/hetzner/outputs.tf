@@ -26,10 +26,6 @@ output "manager_lb_ipv4" {
   value = try(hcloud_load_balancer.manager[0].ipv4, null)
 }
 
-output "mke4_ingress_lb_ipv4" {
-  value = try(hcloud_load_balancer.ingress[0].ipv4, null)
-}
-
 output "ingress_lb_ipv4" {
   value = try(hcloud_load_balancer.ingress[0].ipv4, null)
 }

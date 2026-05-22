@@ -380,11 +380,6 @@ locals {
 
   mke3_tls_email = try(local.mke3_tls.email, null)
 
-  mke3_tls_directory_url = coalesce(
-    try(local.mke3_tls.acme_directory_url, null),
-    "https://acme-v02.api.letsencrypt.org/directory"
-  )
-
   mke3_tls_dir       = local.mke3_tls_enabled ? "${local.artifacts_dir}/tlscerts/mke3/${local.mke3_tls_common_name}" : "${local.artifacts_dir}/tlscerts/mke3"
   mke3_tls_ca_file   = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/ca.pem" : null
   mke3_tls_cert_file = local.mke3_tls_enabled ? "${local.mke3_tls_dir}/server.pem" : null
