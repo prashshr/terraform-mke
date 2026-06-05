@@ -15,7 +15,6 @@ locals {
       node_pools              = []
       tags                    = {}
       mke4_ui_backend_port    = var.mke4_ui_backend_port
-      root_volume_size        = var.aws_root_volume_size
     }
     hetzner = {
       enabled              = false
