@@ -54,3 +54,9 @@ variable "mke4_ui_backend_port" {
   description = "Backend target port for the MKE4 UI load balancer."
   type        = number
 }
+
+variable "root_volume_size" {
+  description = "Default root volume size (GB) for instances, overridable per pool."
+  type        = number
+  default     = 120
+}

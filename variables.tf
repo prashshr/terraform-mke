@@ -95,6 +95,12 @@ variable "mcr_version" {
   default     = "25.0.13"
 }
 
+variable "aws_root_volume_size" {
+  description = "Default root volume size (GB) for AWS instances when not specified per pool."
+  type        = number
+  default     = 120
+}
+
 variable "artifacts_dir" {
   description = "Directory where rendered configs, keys, and metadata are stored."
   type        = string

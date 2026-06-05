@@ -46,7 +46,7 @@ locals {
       roles             = length(try(pool.roles, [])) > 0 ? [for role in pool.roles : lower(role)] : (try(pool.role, null) != null ? [lower(pool.role)] : [])
       os                = lower(try(pool.os, "rocky9"))
       instance_type     = try(pool.instance_type, "t3.large")
-      root_volume_size  = try(pool.root_volume_size, 80)
+      root_volume_size  = try(pool.root_volume_size, var.root_volume_size)
       subnet_index      = try(pool.subnet_index, 0)
       private_interface = try(pool.private_interface, null)
       labels            = try(pool.labels, {})

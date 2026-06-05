@@ -302,6 +302,7 @@ module "aws" {
   resource_prefix      = local.aws_settings_map.resource_prefix
   tags                 = local.aws_settings_map.tags
   mke4_ui_backend_port = local.aws_settings_map.mke4_ui_backend_port
+  root_volume_size     = local.aws_settings_map.root_volume_size
 
   depends_on = [null_resource.artifacts_dirs]
 }
