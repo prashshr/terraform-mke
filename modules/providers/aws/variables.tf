@@ -60,3 +60,15 @@ variable "root_volume_size" {
   type        = number
   default     = 120
 }
+
+variable "profile" {
+  description = "AWS CLI profile for volume resize operations."
+  type        = string
+  default     = null
+}
+
+variable "shared_credentials_file" {
+  description = "Path to AWS shared credentials file for volume resize operations."
+  type        = string
+  default     = null
+}

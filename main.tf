@@ -293,16 +293,18 @@ module "aws" {
 
   source = "./modules/providers/aws"
 
-  cluster_name         = local.aws_settings_map.cluster_name
-  vpc_cidr             = local.aws_settings_map.vpc_cidr
-  availability_zones   = local.aws_settings_map.availability_zones
-  node_pools           = local.aws_settings_map.node_pools
-  ssh_key_prefix       = local.aws_settings_map.ssh_key_prefix
-  ssh_key_dir          = local.ssh_dir
-  resource_prefix      = local.aws_settings_map.resource_prefix
-  tags                 = local.aws_settings_map.tags
-  mke4_ui_backend_port = local.aws_settings_map.mke4_ui_backend_port
-  root_volume_size     = local.aws_settings_map.root_volume_size
+  cluster_name            = local.aws_settings_map.cluster_name
+  vpc_cidr                = local.aws_settings_map.vpc_cidr
+  availability_zones      = local.aws_settings_map.availability_zones
+  node_pools              = local.aws_settings_map.node_pools
+  ssh_key_prefix          = local.aws_settings_map.ssh_key_prefix
+  ssh_key_dir             = local.ssh_dir
+  resource_prefix         = local.aws_settings_map.resource_prefix
+  tags                    = local.aws_settings_map.tags
+  mke4_ui_backend_port    = local.aws_settings_map.mke4_ui_backend_port
+  root_volume_size        = local.aws_settings_map.root_volume_size
+  profile                 = try(local.aws_settings_map.profile, null)
+  shared_credentials_file = try(local.aws_settings_map.shared_credentials_file, null)
 
   depends_on = [null_resource.artifacts_dirs]
 }

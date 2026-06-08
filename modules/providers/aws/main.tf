@@ -337,6 +337,50 @@ resource "aws_instance" "node" {
   }, each.value.labels)
 }
 
+data "aws_region" "current" {}
+
+resource "null_resource" "resize_root_volume" {
+  for_each = local.instances
+
+  triggers = {
+    instance_id  = aws_instance.node[each.key].id
+    desired_size = coalesce(each.value.root_volume_size, var.root_volume_size, 120)
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      set -euo pipefail
+      ${var.profile != null ? "export AWS_PROFILE=\"${var.profile}\"" : ""}
+      ${var.shared_credentials_file != null ? "export AWS_SHARED_CREDENTIALS_FILE=\"${abspath(var.shared_credentials_file)}\"" : ""}
+      INSTANCE_ID="${aws_instance.node[each.key].id}"
+      VOLUME_SIZE=${coalesce(each.value.root_volume_size, var.root_volume_size, 120)}
+      REGION="${data.aws_region.current.name}"
+      VOLUME_ID=$(aws ec2 describe-instances \
+        --instance-ids "$${INSTANCE_ID}" \
+        --region "$${REGION}" \
+        --query 'Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId' \
+        --output text)
+      CURRENT_SIZE=$(aws ec2 describe-volumes \
+        --volume-ids "$${VOLUME_ID}" \
+        --region "$${REGION}" \
+        --query 'Volumes[0].Size' \
+        --output text)
+      if [ "$${CURRENT_SIZE}" -lt "$${VOLUME_SIZE}" ]; then
+        echo "Resizing volume $${VOLUME_ID} from $${CURRENT_SIZE}G to $${VOLUME_SIZE}G"
+        aws ec2 modify-volume \
+          --volume-id "$${VOLUME_ID}" \
+          --size "$${VOLUME_SIZE}" \
+          --region "$${REGION}"
+      else
+        echo "Volume $${VOLUME_ID} already at $${CURRENT_SIZE}G, skipping"
+      fi
+    EOT
+  }
+
+  depends_on = [aws_instance.node]
+}
+
 resource "aws_lb" "mke3" {
   count = length(local.manager_instance_keys) > 0 ? 1 : 0
 
