@@ -54,3 +54,9 @@ variable "mke4_ui_backend_port" {
   description = "Backend target port for the MKE4 UI load balancer."
   type        = number
 }
+
+variable "root_volume_size" {
+  description = "Default root volume size (GB) applied via launch template block_device_mappings. Expanded on first boot via user_data growpart script."
+  type        = number
+  default     = 120
+}

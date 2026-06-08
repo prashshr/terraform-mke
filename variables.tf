@@ -107,6 +107,12 @@ variable "san_override" {
   default     = null
 }
 
+variable "aws_root_volume_size" {
+  description = "Default root volume size (GB) for AWS instances. Applied via launch template with automatic partition expansion on first boot."
+  type        = number
+  default     = 120
+}
+
 variable "tls_reuse_min_validity_hours" {
   description = "Minimum remaining certificate validity required before reusing an existing certificate from artifacts/tlscerts."
   type        = number

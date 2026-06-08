@@ -46,7 +46,7 @@ locals {
       roles             = length(try(pool.roles, [])) > 0 ? [for role in pool.roles : lower(role)] : (try(pool.role, null) != null ? [lower(pool.role)] : [])
       os                = lower(try(pool.os, "rocky9"))
       instance_type     = try(pool.instance_type, "t3.large")
-      root_volume_size  = try(pool.root_volume_size, 80)
+      root_volume_size  = try(pool.root_volume_size, var.root_volume_size)
       subnet_index      = try(pool.subnet_index, 0)
       private_interface = try(pool.private_interface, null)
       labels            = try(pool.labels, {})
@@ -289,6 +289,27 @@ data "aws_ami" "pool" {
   }
 }
 
+resource "aws_launch_template" "node" {
+  for_each = {
+    for pool in local.node_pools : pool.name => pool
+  }
+
+  name_prefix = "${var.resource_prefix}-${each.value.name}-"
+
+  block_device_mappings {
+    device_name = "/dev/sda1"
+    ebs {
+      volume_size           = each.value.root_volume_size
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+
+  user_data = base64encode(templatefile("${path.module}/templates/user_data.sh", {
+    root_volume_gb = each.value.root_volume_size
+  }))
+}
+
 resource "aws_instance" "node" {
   for_each = local.instances
 
@@ -303,9 +324,9 @@ resource "aws_instance" "node" {
     contains(each.value.roles, "manager") ? [aws_security_group.managers.id] : []
   ))
 
-  root_block_device {
-    volume_size = each.value.root_volume_size
-    volume_type = "gp3"
+  launch_template {
+    id      = aws_launch_template.node[each.value.pool_name].id
+    version = "$Latest"
   }
 
   tags = merge(local.default_tags, {
