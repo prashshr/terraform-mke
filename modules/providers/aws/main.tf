@@ -356,6 +356,8 @@ resource "null_resource" "resize_root_volume" {
       INSTANCE_ID="${aws_instance.node[each.key].id}"
       VOLUME_SIZE=${coalesce(each.value.root_volume_size, var.root_volume_size, 120)}
       REGION="${data.aws_region.current.name}"
+      SSH_USER="${each.value.ssh_user}"
+      SSH_KEY="${local.ssh_private_key_path}"
       VOLUME_ID=$(aws ec2 describe-instances \
         --instance-ids "$${INSTANCE_ID}" \
         --region "$${REGION}" \
@@ -374,6 +376,17 @@ resource "null_resource" "resize_root_volume" {
           --region "$${REGION}"
       else
         echo "Volume $${VOLUME_ID} already at $${CURRENT_SIZE}G, skipping"
+      fi
+      PUBLIC_IP=$(aws ec2 describe-instances \
+        --instance-ids "$${INSTANCE_ID}" \
+        --region "$${REGION}" \
+        --query 'Reservations[0].Instances[0].PublicIpAddress' \
+        --output text)
+      if [ -n "$${PUBLIC_IP}" ] && [ -f "$${SSH_KEY}" ]; then
+        echo "Expanding partition on $${PUBLIC_IP}..."
+        ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+          -i "$${SSH_KEY}" "$${SSH_USER}@$${PUBLIC_IP}" \
+          "sudo growpart /dev/nvme0n1 4 2>/dev/null; sudo xfs_growfs / 2>/dev/null; echo 'Done: \$(df -h / | tail -1)'" 2>/dev/null || true
       fi
     EOT
   }
