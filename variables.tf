@@ -34,6 +34,12 @@ variable "app_domain_msr" {
   default     = "msr"
 }
 
+variable "app_domain_msr4" {
+  description = "Hostname prefix for MSR4 services."
+  type        = string
+  default     = "msr4"
+}
+
 variable "admin_username" {
   description = "Username for both Launchpad and mkectl administrative users."
   type        = string
@@ -165,7 +171,22 @@ variable "ingress_tls" {
 }
 
 variable "msr_tls" {
-  description = "TLS certificate configuration for MSR."
+  description = "TLS certificate configuration for MSR (v2.9)."
+  type = object({
+    enabled            = optional(bool)
+    use_acme           = optional(bool)
+    common_name        = optional(string)
+    email              = optional(string)
+    acme_directory_url = optional(string)
+    cert_pem           = optional(string)
+    key_pem            = optional(string)
+    ca_pem             = optional(string)
+  })
+  default = {}
+}
+
+variable "msr4_tls" {
+  description = "TLS certificate configuration for MSR4."
   type = object({
     enabled            = optional(bool)
     use_acme           = optional(bool)

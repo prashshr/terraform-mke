@@ -1,6 +1,36 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply destroy mke3 mke4 mke4-upgrade-prereq mkectl-upgrade nuke-it
+.PHONY: init plan apply destroy mke3 mke4 mke4-upgrade-prereq mkectl-upgrade nuke-it \
+        msr4 msr4-clean generate-msr-values
+
+# -- MSR4 targets -----------------------------------------------------------------
+MSR4_HA        ?= false
+MSR4_VERSION   ?= 4.13.5
+MSR4_DOMAIN    ?= msr4.$(shell terraform output -raw root_domain 2>/dev/null || echo "")
+
+msr4:
+	@test -f artifacts/ssh/ps-mke-aws.pem || { echo "Missing SSH key; run make apply first"; exit 1; }
+	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	./artifacts/scripts/install_msr4.sh \
+	  $(if $(filter true,$(MSR4_HA)),--ha) \
+	  --msr-version "$(MSR4_VERSION)"
+
+msr4-clean:
+	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	@if kubectl get namespace msr4 &>/dev/null; then \
+	  echo "Removing MSR4 Helm release..."; \
+	  helm uninstall msr4 -n msr4 2>/dev/null || true; \
+	  echo "Removing namespace msr4..."; \
+	  kubectl delete namespace msr4 --timeout=120s; \
+	  echo "MSR4 cleanup complete."; \
+	else \
+	  echo "MSR4 namespace not found. Nothing to clean."; \
+	fi
+
+generate-msr-values:
+	./artifacts/scripts/generate_msr_values.sh "$(MSR4_VERSION)"
+
+# -- Core targets -----------------------------------------------------------------
 
 init:
 	terraform init

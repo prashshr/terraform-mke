@@ -1,3 +1,8 @@
+output "root_domain" {
+  description = "Primary DNS domain from variables."
+  value       = local.root_domain
+}
+
 output "all_hosts" {
   description = "Normalized host inventory across every provider."
   value       = local.all_hosts

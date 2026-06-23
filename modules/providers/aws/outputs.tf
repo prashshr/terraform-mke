@@ -37,3 +37,7 @@ output "mke4_ui_lb_dns" {
 output "msr_lb_dns" {
   value = try(aws_lb.msr[0].dns_name, null)
 }
+
+output "msr4_lb_dns" {
+  value = try(aws_lb.msr4[0].dns_name, null)
+}

@@ -383,10 +383,47 @@ resource "null_resource" "resize_root_volume" {
         --query 'Reservations[0].Instances[0].PublicIpAddress' \
         --output text)
       if [ -n "$${PUBLIC_IP}" ] && [ -f "$${SSH_KEY}" ]; then
-        echo "Expanding partition on $${PUBLIC_IP}..."
+        echo "Checking and expanding partition on $${PUBLIC_IP}..."
         ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-          -i "$${SSH_KEY}" "$${SSH_USER}@$${PUBLIC_IP}" \
-          "sudo growpart /dev/nvme0n1 4 2>/dev/null; sudo xfs_growfs / 2>/dev/null; echo 'Done: \$(df -h / | tail -1)'" 2>/dev/null || true
+          -i "$${SSH_KEY}" "$${SSH_USER}@$${PUBLIC_IP}" <<'REMOTESHELL' 2>&1 || echo "WARNING: remote expansion failed, check logs above"
+          set -e
+          ROOT_DEV=$(df / --output=source | tail -1)
+          echo "Root device: $ROOT_DEV"
+
+          # ---- non-LVM root (direct partition) ----
+          if echo "$ROOT_DEV" | grep -qE '^/dev/(nvme|xd|sd)'; then
+            BASE_DEV=$(echo "$ROOT_DEV" | sed 's/[0-9]*$//')
+            PART_NUM=$(echo "$ROOT_DEV" | grep -oP '\d+$' || echo "")
+            if [ -n "$PART_NUM" ]; then
+              echo "Growing partition $PART_NUM on $BASE_DEV"
+              growpart "$BASE_DEV" "$PART_NUM" || echo "growpart failed (non-fatal)"
+            fi
+            FS_TYPE=$(blkid -o value -s TYPE "$ROOT_DEV" 2>/dev/null)
+            case "$FS_TYPE" in
+              xfs)  echo "Growing XFS"; xfs_growfs / || true ;;
+              ext4) echo "Resizing ext4"; resize2fs "$ROOT_DEV" || true ;;
+            esac
+          fi
+
+          # ---- LVM root (e.g. /dev/mapper/rl-root) ----
+          if echo "$ROOT_DEV" | grep -q '^/dev/mapper/'; then
+            echo "Detected LVM root"
+            PV_NAME=$(pvdisplay -C -o "PV Name" --noheadings 2>/dev/null | head -1 | xargs)
+            if [ -n "$PV_NAME" ]; then
+              echo "Resizing PV: $PV_NAME"
+              pvresize "$PV_NAME" || true
+            fi
+            echo "Extending LV $ROOT_DEV to 100% FREE"
+            lvextend -l +100%FREE "$ROOT_DEV" || true
+            FS_TYPE=$(blkid -o value -s TYPE "$ROOT_DEV" 2>/dev/null)
+            case "$FS_TYPE" in
+              xfs)  echo "Growing XFS"; xfs_growfs / || true ;;
+              ext4) echo "Resizing ext4"; resize2fs "$ROOT_DEV" || true ;;
+            esac
+          fi
+
+          echo "Done: $(df -h / | tail -1)"
+REMOTESHELL
       fi
     EOT
   }
@@ -679,5 +716,59 @@ resource "aws_lb_listener" "msr_443" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.msr_443[0].arn
+  }
+}
+
+# MSR4 NLB: port 443 → nodePort 34003 on msr-role instances
+resource "aws_lb" "msr4" {
+  count = length(local.msr_instance_keys) > 0 ? 1 : 0
+
+  name               = "${substr(var.resource_prefix, 0, 18)}-msr4"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = [for subnet in aws_subnet.public : subnet.id]
+
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.default_tags, {
+    Name = "${var.resource_prefix}-msr4"
+  })
+}
+
+resource "aws_lb_target_group" "msr4_443" {
+  count = length(local.msr_instance_keys) > 0 ? 1 : 0
+
+  name        = "${substr(var.resource_prefix, 0, 16)}-msr434003"
+  port        = 34003
+  protocol    = "TCP"
+  target_type = "instance"
+  vpc_id      = aws_vpc.cluster.id
+
+  health_check {
+    protocol = "TCP"
+    port     = "34003"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "msr4_443" {
+  for_each = length(local.msr_instance_keys) > 0 ? {
+    for key in local.msr_instance_keys : key => aws_instance.node[key].id
+  } : {}
+
+  target_group_arn = aws_lb_target_group.msr4_443[0].arn
+  target_id        = each.value
+  port             = 34003
+}
+
+resource "aws_lb_listener" "msr4_443" {
+  count = length(local.msr_instance_keys) > 0 ? 1 : 0
+
+  load_balancer_arn = aws_lb.msr4[0].arn
+  port              = 443
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.msr4_443[0].arn
   }
 }

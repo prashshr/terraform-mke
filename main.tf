@@ -1,6 +1,6 @@
 resource "null_resource" "artifacts_dirs" {
   provisioner "local-exec" {
-    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\""
+    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\" \"${local.msr4_tls_dir}\""
   }
 
   triggers = {
@@ -10,6 +10,7 @@ resource "null_resource" "artifacts_dirs" {
     tls_dir_ingress = local.ingress_tls_dir
     tls_dir_msr     = local.msr_tls_dir
     tls_dir_mke4    = local.mke4_tls_dir
+    tls_dir_msr4    = local.msr4_tls_dir
   }
 }
 
@@ -61,6 +62,19 @@ data "external" "msr_tls_existing" {
     domain            = local.msr_tls_common_name
     cert_file         = local.msr_tls_cert_file
     key_file          = local.msr_tls_key_file
+    min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
+  }
+}
+
+data "external" "msr4_tls_existing" {
+  count = local.msr4_tls_wants_acme ? 1 : 0
+
+  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+
+  query = {
+    domain            = local.msr4_tls_common_name
+    cert_file         = local.msr4_tls_cert_file
+    key_file          = local.msr4_tls_key_file
     min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
   }
 }
@@ -288,6 +302,62 @@ resource "null_resource" "msr_tls_files" {
   }
 }
 
+resource "tls_private_key" "msr4_acme_account" {
+  count = local.msr4_tls_use_acme ? 1 : 0
+
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "acme_registration" "msr4" {
+  count = local.msr4_tls_use_acme ? 1 : 0
+
+  account_key_pem = tls_private_key.msr4_acme_account[0].private_key_pem
+  email_address   = try(var.msr4_tls.email, null)
+}
+
+resource "acme_certificate" "msr4" {
+  count = local.msr4_tls_use_acme ? 1 : 0
+
+  account_key_pem               = acme_registration.msr4[0].account_key_pem
+  common_name                   = local.msr4_tls_common_name
+  revoke_certificate_on_destroy = false
+
+  dns_challenge {
+    provider = "cloudflare"
+
+    config = {
+      CLOUDFLARE_API_TOKEN = local.cloudflare_api_token
+    }
+  }
+}
+
+resource "null_resource" "msr4_tls_files" {
+  count = local.msr4_tls_enabled && (
+    local.msr4_tls_write_files
+  ) ? 1 : 0
+
+  triggers = {
+    ca_sha   = sha256(local.msr4_tls_ca_pem)
+    cert_sha = sha256(local.msr4_tls_cert_pem)
+    key_sha  = sha256(local.msr4_tls_key_pem)
+    dir      = local.msr4_tls_dir
+  }
+
+  provisioner "local-exec" {
+    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    environment = {
+      TLS_DIR       = local.msr4_tls_dir
+      TLS_CA_FILE   = local.msr4_tls_ca_file
+      TLS_CERT_FILE = local.msr4_tls_cert_file
+      TLS_KEY_FILE  = local.msr4_tls_key_file
+      TLS_CA_PEM    = local.msr4_tls_ca_pem
+      TLS_CERT_PEM  = local.msr4_tls_cert_pem
+      TLS_KEY_PEM   = local.msr4_tls_key_pem
+    }
+  }
+}
+
 module "aws" {
   count = local.aws_enabled ? 1 : 0
 
@@ -349,6 +419,7 @@ locals {
   aws_api_lb_dns        = try(module.aws[0].api_lb_dns, null)
   aws_mke4_ui_lb_dns    = try(module.aws[0].mke4_ui_lb_dns, null)
   aws_msr_lb_dns        = try(module.aws[0].msr_lb_dns, null)
+  aws_msr4_lb_dns       = try(module.aws[0].msr4_lb_dns, null)
   hetzner_manager_lb_ip = try(module.hetzner[0].manager_lb_ipv4, null)
   hetzner_ingress_lb_ip = try(module.hetzner[0].ingress_lb_ipv4, null)
   hetzner_api_lb_ip     = try(module.hetzner[0].api_lb_ipv4, null)
@@ -508,6 +579,39 @@ locals {
     local.msr_tls_use_acme ||
     (length(trimspace(local.msr_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.msr_tls_key_input_pem)) > 0)
+  )
+
+  msr4_tls = var.msr4_tls
+
+  msr4_tls_enabled = try(coalesce(tobool(local.msr4_tls.enabled), false), false)
+
+  msr4_tls_wants_acme = (
+    local.msr4_tls_enabled &&
+    try(coalesce(tobool(local.msr4_tls.use_acme), false), false)
+  )
+
+  msr4_tls_common_name = local.msr4_tls_enabled ? coalesce(
+    try(local.msr4_tls.common_name, null),
+    local.cloudflare_record_name_msr4
+  ) : null
+
+  msr4_tls_dir       = local.msr4_tls_enabled ? "${local.artifacts_dir}/tlscerts/msr4/${local.msr4_tls_common_name}" : "${local.artifacts_dir}/tlscerts/msr4"
+  msr4_tls_ca_file   = "${local.msr4_tls_dir}/ca.pem"
+  msr4_tls_cert_file = "${local.msr4_tls_dir}/server.pem"
+  msr4_tls_key_file  = "${local.msr4_tls_dir}/key.pem"
+
+  msr4_tls_use_existing   = local.msr4_tls_wants_acme && try(data.external.msr4_tls_existing[0].result.valid == "true", false)
+  msr4_tls_use_acme       = local.msr4_tls_wants_acme && !local.msr4_tls_use_existing
+  msr4_tls_ca_input_pem   = try(local.msr4_tls.ca_pem != null ? local.msr4_tls.ca_pem : "", "")
+  msr4_tls_cert_input_pem = try(local.msr4_tls.cert_pem != null ? local.msr4_tls.cert_pem : "", "")
+  msr4_tls_key_input_pem  = try(local.msr4_tls.key_pem != null ? local.msr4_tls.key_pem : "", "")
+  msr4_tls_ca_pem         = local.msr4_tls_use_existing ? (fileexists(local.msr4_tls_ca_file) ? file(local.msr4_tls_ca_file) : "") : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].issuer_pem, "") : local.msr4_tls_ca_input_pem
+  msr4_tls_cert_pem       = local.msr4_tls_use_existing ? file(local.msr4_tls_cert_file) : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].certificate_pem, "") : local.msr4_tls_cert_input_pem
+  msr4_tls_key_pem        = local.msr4_tls_use_existing ? file(local.msr4_tls_key_file) : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].private_key_pem, "") : local.msr4_tls_key_input_pem
+  msr4_tls_write_files = (
+    local.msr4_tls_use_acme ||
+    (length(trimspace(local.msr4_tls_cert_input_pem)) > 0 &&
+    length(trimspace(local.msr4_tls_key_input_pem)) > 0)
   )
 
   primary_manager_address = local.san_override != null ? local.san_override : (
@@ -746,6 +850,23 @@ resource "cloudflare_record" "aws_mke4_ui" {
   name            = local.cloudflare_record_name_mke4_ui
   type            = "CNAME"
   content         = local.aws_mke4_ui_lb_dns
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "aws_msr4" {
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_record_name_msr4 != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_record_name_msr4
+  type            = "CNAME"
+  content         = local.aws_msr4_lb_dns
   ttl             = 300
   proxied         = false
   allow_overwrite = true
