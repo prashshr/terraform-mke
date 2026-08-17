@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply destroy mke3 mke4 mke4-upgrade-prereq mkectl-upgrade nuke-mke \
+.PHONY: init plan apply destroy mke3 mke4 mke4.1 mke4.2 mke4-upgrade-prereq mkectl-upgrade nuke-mke \
         msr4 msr4-clean generate-msr-values
 
 # -- MSR4 targets -----------------------------------------------------------------
@@ -82,6 +82,20 @@ mke3:
 
 mke4:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+
+mke4.1: MKE4_VERSION ?= 4.1.5
+mke4.1:
+	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	terraform apply -auto-approve -var "mke4_version=$(MKE4_VERSION)"
+	cp artifacts/configs/mke4.yaml artifacts/configs/mke4-v$(MKE4_VERSION).yaml
+	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+
+mke4.2: MKE4_VERSION ?= 4.2.0
+mke4.2:
+	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	terraform apply -auto-approve -var "mke4_version=$(MKE4_VERSION)"
+	cp artifacts/configs/mke4.yaml artifacts/configs/mke4-v$(MKE4_VERSION).yaml
 	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
 
 mke4-upgrade-prereq:

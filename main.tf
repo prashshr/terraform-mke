@@ -689,7 +689,7 @@ locals {
 
   # Version-aware template selection: extract major.minor for template lookup
   mke4_version_major_minor = join(".", slice(split(".", replace(local.mkectl_version, "v", "")), 0, 2))
-  mke4_template_path = fileexists("${path.module}/templates/mke4/mke4-${local.mke4_version_major_minor}.yaml.tmpl") ? "${path.module}/templates/mke4/mke4-${local.mke4_version_major_minor}.yaml.tmpl" : "${path.module}/templates/mke4.yaml.tmpl"
+  mke4_template_path = fileexists("${path.module}/templates/mke4-v${local.mke4_version_major_minor}.yaml.tmpl") ? "${path.module}/templates/mke4-v${local.mke4_version_major_minor}.yaml.tmpl" : "${path.module}/templates/mke4-v4.2.yaml.tmpl"
 
   mkectl_cloud_provider    = try(local.all_hosts[0].provider, "aws")
   mkectl_network_cidr      = local.aws_enabled ? local.aws_settings_map.vpc_cidr : "192.168.0.0/16"

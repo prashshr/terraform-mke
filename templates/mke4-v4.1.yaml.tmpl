@@ -1,12 +1,17 @@
-apiVersion: mke.mirantis.com/v1alpha1
-kind: MkeConfig
+apiVersion: ${apiVersion}
+kind: ${kind}
 metadata:
   name: mke
-  namespace: mke
+  namespace: ${namespace}
 spec:
   airgap:
     enabled: false
   apiServer:
+    externalAddress: ${api_server.external_address}
+    sans:
+%{ for san in api_server.sans ~}
+      - ${san}
+%{ endfor ~}
     audit:
       enabled: false
       level: Metadata
@@ -18,33 +23,36 @@ spec:
     encryptionProvider: /var/lib/k0s/encryption.cfg
     eventRateLimit:
       enabled: false
-    externalAddress: ""
     requestTimeout: 1m0s
+%{ if mke4_tls_present ~}
+  certificates:
+    enabled: true
+    domainName: ${mke4_tls_common_name}
+    ca: |
+%{ for line in split("\n", mke4_tls_ca_pem) ~}
+      ${line}
+%{ endfor ~}
+    cert: |
+%{ for line in split("\n", mke4_tls_cert_pem) ~}
+      ${line}
+%{ endfor ~}
+    key: |
+%{ for line in split("\n", mke4_tls_key_pem) ~}
+      ${line}
+%{ endfor ~}
+%{ endif ~}
   authentication:
     expiry: {}
     ldap:
       enabled: false
     oidc:
       enabled: false
-    resources:
-      limits:
-        memory: 256Mi
-      requests:
-        cpu: 50m
-        memory: 128Mi
+    replicaCount: 1
     saml:
       enabled: false
   cloudProvider:
     enabled: false
-    provider: aws
-  componentScheduling:
-    enabled: true
-    topologySpreadConstraints:
-    - matchLabelKeys:
-      - pod-template-hash
-      maxSkew: 1
-      topologyKey: kubernetes.io/hostname
-      whenUnsatisfiable: ScheduleAnyway
+    provider: ${cloud_provider}
   controllerManager:
     terminatedPodGCThreshold: 12500
   devicePlugins:
@@ -53,46 +61,30 @@ spec:
       mig: {}
   dns:
     lameduck: {}
-  envoyGateway:
-    nodeSelector:
-      kubernetes.io/os: linux
-    resources: {}
-    tolerations:
-    - effect: NoSchedule
-      key: node-role.kubernetes.io/master
-      operator: Exists
-      value: ""
-    - effect: NoSchedule
-      key: node-role.kubernetes.io/control-plane
-      operator: Exists
-      value: ""
   etcd: {}
-  gatewayMKEIngress:
-    envoyProxy:
-      podDisruptionBudget:
-        maxUnavailable: 1
-      resources: {}
-    nodePorts:
-      http: 33000
-      https: 33001
-    ports:
-      http: 80
-      https: 443
   hosts:
-  - role: controller+worker
+%{ for host in hosts ~}
+  - role: ${host.role}
     ssh:
-      address: 1.2.3.4
-      keyPath: /root/.ssh/id_rsa
-      port: 22
-      user: root
+      address: ${host.ssh.address}
+      keyPath: ${host.ssh.keyPath}
+      port: ${host.ssh.port}
+      user: ${host.ssh.user}
+    privateInterface: ${host.privateInterface}
+%{ endfor ~}
   ingressController:
     affinity:
       nodeAffinity: {}
-    enabled: false
+    enabled: true
     extraArgs:
       enableSslPassthrough: false
-    nodePorts: {}
+      httpPort: 80
+      httpsPort: 443
+    nodePorts:
+      http: ${gateway_http_node_port}
+      https: ${gateway_https_node_port}
     ports: {}
+    replicaCount: 2
   k8sProviderSpecs:
     dataDir: /var/lib/k0s
   kubelet:
@@ -115,12 +107,14 @@ spec:
     token: ""
   monitoring:
     enableCAdvisor: false
+    enableGrafana: true
     grafana:
-      ingress: {}
+      ingress:
+        enabled: false
     prometheus: {}
   network:
-    controlPlaneLoadBalancing:
-      enabled: false
+    cplb:
+      disabled: true
     kubeProxy:
       iptables:
         minSyncPeriod: 0s
@@ -138,23 +132,19 @@ spec:
         syncPeriod: 0s
     multus:
       enabled: false
+    nllb:
+      disabled: true
     nodePortRange: 32768-35535
     providers:
-    - enabled: true
-      extraConfig:
-        cidrV4: 192.168.0.0/16
-        linuxDataplane: Iptables
-        loglevel: Info
-      provider: calico
-    - enabled: false
-      provider: custom
+      - enabled: true
+        extraConfig:
+          cidrV4: ${network_cidr}
+          linuxDataplane: Iptables
+          loglevel: Info
+        provider: calico
+      - enabled: false
+        provider: custom
     serviceCIDR: 10.96.0.0/16
-  nodeLocalDNS:
-    enabled: false
-    nodeLocalConfigPersist: false
-    resources:
-      requests: {}
-  operator: {}
   policyController:
     opaGatekeeper:
       enabled: false
@@ -164,25 +154,6 @@ spec:
     imageRegistry:
       url: registry.mirantis.com/mke
   scheduler: {}
-  secretsStoreCSIDriver:
-    automountServiceAccountToken: true
-    enabled: false
-    linux:
-      enabled: true
-    maxCallRecvMsgSize: 4194304
-    syncSecret: false
-    windows:
-      enabled: false
   tracking:
     enabled: true
-  ui:
-    resources:
-      limits:
-        memory: 128Mi
-      requests:
-        cpu: 50m
-        memory: 64Mi
-  version: v4.2.0
-  windows:
-    gmsa:
-      enabled: false
+  version: ${version}
