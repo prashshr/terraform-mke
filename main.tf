@@ -687,6 +687,10 @@ locals {
 
   mkectl_version = startswith(lower(var.mke4_version), "v") ? var.mke4_version : "v${var.mke4_version}"
 
+  # Version-aware template selection: extract major.minor for template lookup
+  mke4_version_major_minor = join(".", slice(split(".", replace(local.mkectl_version, "v", "")), 0, 2))
+  mke4_template_path = fileexists("${path.module}/templates/mke4/mke4-${local.mke4_version_major_minor}.yaml.tmpl") ? "${path.module}/templates/mke4/mke4-${local.mke4_version_major_minor}.yaml.tmpl" : "${path.module}/templates/mke4.yaml.tmpl"
+
   mkectl_cloud_provider    = try(local.all_hosts[0].provider, "aws")
   mkectl_network_cidr      = local.aws_enabled ? local.aws_settings_map.vpc_cidr : "192.168.0.0/16"
   mkectl_api_external_host = local.mke4_domain
@@ -778,7 +782,7 @@ resource "local_sensitive_file" "mke4" {
   filename             = "${local.config_dir}/mke4.yaml"
   file_permission      = "0600"
   directory_permission = "0700"
-  content              = templatefile("${path.module}/templates/mke4.yaml.tmpl", local.mkectl_context)
+  content              = templatefile(local.mke4_template_path, local.mkectl_context)
 
   depends_on = [null_resource.artifacts_dirs]
 }

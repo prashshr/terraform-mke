@@ -98,7 +98,7 @@ variable "mke4_gateway_https_node_port" {
 variable "mke4_metallb_enabled" {
   description = "Enable MetalLB load balancer in MKE4 (spec.metallb.enabled)."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "msr_version" {
