@@ -17,9 +17,15 @@ variable "app_domain_mke3" {
 }
 
 variable "app_domain_mke4" {
-  description = "Hostname prefix for MKE4 services."
+  description = "Hostname prefix for MKE4 API server (externalAddress)."
   type        = string
   default     = "mke4"
+}
+
+variable "app_domain_mke4_ui" {
+  description = "Hostname prefix for MKE4 UI/certificates (must differ from app_domain_mke4 per MKE 4.2+ validation)."
+  type        = string
+  default     = "mke4-ui"
 }
 
 variable "app_domain_ingress" {
@@ -68,25 +74,31 @@ variable "mke3_version" {
 variable "mke4_version" {
   description = "mkectl (MKE 4.x) version."
   type        = string
-  default     = "4.1.5"
+  default     = "4.2.0"
 }
 
 variable "mke4_ui_backend_port" {
-  description = "Backend target port for the MKE4 UI load balancer."
+  description = "Backend target port for the MKE4 UI load balancer. Ports 33000-33001 are reserved for MKE3 ingress during MKE3→MKE4 upgrades."
   type        = number
   default     = 34001
 }
 
 variable "mke4_gateway_http_node_port" {
-  description = "Gateway HTTP node port passed to mkectl upgrade."
+  description = "Gateway HTTP node port passed to mkectl upgrade. Ports 33000-33001 are reserved for MKE3 ingress."
   type        = number
   default     = 34000
 }
 
 variable "mke4_gateway_https_node_port" {
-  description = "Gateway HTTPS node port passed to mkectl upgrade."
+  description = "Gateway HTTPS node port passed to mkectl upgrade. Ports 33000-33001 are reserved for MKE3 ingress."
   type        = number
   default     = 34001
+}
+
+variable "mke4_metallb_enabled" {
+  description = "Enable MetalLB load balancer in MKE4 (spec.metallb.enabled)."
+  type        = bool
+  default     = false
 }
 
 variable "msr_version" {
@@ -274,6 +286,7 @@ variable "cloudflare_settings" {
     record_name         = optional(string)
     record_name_manager = optional(string)
     record_name_ingress = optional(string)
+    record_name_mke4    = optional(string)
     record_name_mke4_ui = optional(string)
     api_token           = optional(string)
   })

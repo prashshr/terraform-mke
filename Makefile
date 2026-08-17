@@ -1,9 +1,29 @@
 SHELL := /bin/bash
 
-.PHONY: init plan apply destroy mke3 mke4 mke4-upgrade-prereq mkectl-upgrade nuke-it \
+.PHONY: init plan apply destroy mke3 mke4 mke4-upgrade-prereq mkectl-upgrade nuke-mke \
         msr4 msr4-clean generate-msr-values
 
 # -- MSR4 targets -----------------------------------------------------------------
+# Variables (all optional):
+#   MSR4_HA              Set to "true" for HA mode (default: false)
+#   MSR4_VERSION         MSR Helm chart version (default: 4.13.5)
+#   MSR4_DOMAIN          FQDN for MSR4 UI (default: msr4.<root_domain>)
+#   MSR4_HTTP_NODE_PORT  HTTP NodePort (default: 34002)
+#   MSR4_HTTPS_NODE_PORT HTTPS NodePort (default: 34003)
+#   MSR4_NFS_NODE        NFS server node (auto-detect if unset)
+#   MSR4_NFS_PATH        NFS export path (default: /msr4)
+#   MSR4_SSH_KEY         SSH key path (auto-detect if unset)
+#   MSR4_HELM_USERNAME   Mirantis registry Helm username
+#   MSR4_HELM_PASSWORD   Mirantis registry Helm password
+#   MSR4_YES             Set to "true" to skip confirmation prompts
+#   CUSTOM_VALUES        Path to custom Helm values file
+#
+# Examples:
+#   make msr4                                    # single-replica
+#   make msr4 MSR4_HA=true                       # HA mode
+#   make msr4 MSR4_HA=true MSR4_VERSION=4.13.4   # HA mode, specific version
+#   make msr4 MSR4_HTTP_NODE_PORT=30080          # custom port
+#   make msr4 MSR4_YES=true                      # skip confirmation prompts
 MSR4_HA        ?= false
 MSR4_VERSION   ?= 4.13.5
 MSR4_DOMAIN    ?= msr4.$(shell terraform output -raw root_domain 2>/dev/null || echo "")
@@ -13,7 +33,17 @@ msr4:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	./artifacts/scripts/install_msr4.sh \
 	  $(if $(filter true,$(MSR4_HA)),--ha) \
-	  --msr-version "$(MSR4_VERSION)"
+	  --msr-version "$(MSR4_VERSION)" \
+	  $(if $(MSR4_DOMAIN),--domain "$(MSR4_DOMAIN)") \
+	  $(if $(MSR4_HTTP_NODE_PORT),--http-node-port "$(MSR4_HTTP_NODE_PORT)") \
+	  $(if $(MSR4_HTTPS_NODE_PORT),--https-node-port "$(MSR4_HTTPS_NODE_PORT)") \
+	  $(if $(MSR4_NFS_NODE),--nfs-node "$(MSR4_NFS_NODE)") \
+	  $(if $(MSR4_NFS_PATH),--nfs-path "$(MSR4_NFS_PATH)") \
+	  $(if $(MSR4_SSH_KEY),--ssh-key "$(MSR4_SSH_KEY)") \
+	  $(if $(MSR4_HELM_USERNAME),--helm-username "$(MSR4_HELM_USERNAME)") \
+	  $(if $(MSR4_HELM_PASSWORD),--helm-password "$(MSR4_HELM_PASSWORD)") \
+	  $(if $(CUSTOM_VALUES),--values "$(CUSTOM_VALUES)") \
+	  $(if $(filter true,$(MSR4_YES)),--yes)
 
 msr4-clean:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
@@ -73,11 +103,17 @@ mkectl-upgrade:
 	  --gateway-https-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT" \
 	  --force
 
-nuke-it:
+nuke-mke:
 	@echo "Starting MKE node cleanup..."
 	@set -e; \
-	for i in $$(launchpad describe -c artifacts/configs/launchpad.yaml hosts | egrep -v ADDRESS | awk '{ print $$1 }'); do \
+	for i in $$(terraform output -json all_hosts 2>/dev/null | jq -r '.[].public_ip'); do \
 		echo "Cleaning node: $$i"; \
-		ssh -o StrictHostKeyChecking=no -i artifacts/ssh/ps-mke-aws.pem ec2-user@$$i 'bash -s' < ./artifacts/scripts/cleanup_masternode_script.sh; \
+		ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i artifacts/ssh/ps-mke-aws.pem ec2-user@$$i 'bash -s' < ./artifacts/scripts/cleanup_masternode_script.sh; \
 	done
 	@echo "MKE cleanup complete!"
+
+
+msr4-dummy-data:
+	./artifacts/scripts/msr4-dummy-data.sh
+
+

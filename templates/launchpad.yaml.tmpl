@@ -37,7 +37,6 @@ spec:
     adminPassword: ${admin_password}
     licenseFilePath: ${license_file_path}
     installFlags:
-      - ${orchestrator_flag}
       - --force-minimums
       # - --dns=1.1.1.1
       # - --kube-apiserver-port=8443
@@ -60,7 +59,7 @@ spec:
 %{ if enable_msr ~}
     version: ${msr_version}
     installFlags:
-      - --ucp-insecure-tls
+      #- --ucp-insecure-tls
 %{ if msr_external_url != null ~}
       - --dtr-external-url ${msr_external_url}
 %{ endif ~}
@@ -68,7 +67,6 @@ spec:
     {}
 %{ endif ~}
   mcr:
-    version: ${mcr_version}
     channel: stable-${mcr_version}
     repoURL: https://repos.mirantis.com
   cluster:

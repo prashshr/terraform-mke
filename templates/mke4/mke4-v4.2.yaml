@@ -1,17 +1,12 @@
-apiVersion: ${apiVersion}
-kind: ${kind}
+apiVersion: mke.mirantis.com/v1alpha1
+kind: MkeConfig
 metadata:
   name: mke
-  namespace: ${namespace}
+  namespace: mke
 spec:
   airgap:
     enabled: false
   apiServer:
-    externalAddress: ${api_server.external_address}
-    sans:
-%{ for san in api_server.sans ~}
-      - ${san}
-%{ endfor ~}
     audit:
       enabled: false
       level: Metadata
@@ -23,24 +18,8 @@ spec:
     encryptionProvider: /var/lib/k0s/encryption.cfg
     eventRateLimit:
       enabled: false
+    externalAddress: ""
     requestTimeout: 1m0s
-%{ if mke4_tls_present ~}
-  certificates:
-    enabled: true
-    domainName: ${mke4_tls_common_name}
-    ca: |
-%{ for line in split("\n", mke4_tls_ca_pem) ~}
-      ${line}
-%{ endfor ~}
-    cert: |
-%{ for line in split("\n", mke4_tls_cert_pem) ~}
-      ${line}
-%{ endfor ~}
-    key: |
-%{ for line in split("\n", mke4_tls_key_pem) ~}
-      ${line}
-%{ endfor ~}
-%{ endif ~}
   authentication:
     expiry: {}
     ldap:
@@ -55,19 +34,9 @@ spec:
         memory: 128Mi
     saml:
       enabled: false
-  backup:
-    enabled: true
-    scheduled_backup:
-      enabled: false
-    storage_provider:
-      external_options: {}
-      in_cluster_options:
-        admin_credentials_secret: minio-credentials
-        enable_ui: true
-      type: InCluster
   cloudProvider:
     enabled: false
-    provider: ${cloud_provider}
+    provider: aws
   componentScheduling:
     enabled: true
     topologySpreadConstraints:
@@ -104,21 +73,18 @@ spec:
         maxUnavailable: 1
       resources: {}
     nodePorts:
-      http: ${gateway_http_node_port}
-      https: ${gateway_https_node_port}
+      http: 33000
+      https: 33001
     ports:
       http: 80
       https: 443
   hosts:
-%{ for host in hosts ~}
-  - role: ${host.role}
+  - role: controller+worker
     ssh:
-      address: ${host.ssh.address}
-      keyPath: ${host.ssh.keyPath}
-      port: ${host.ssh.port}
-      user: ${host.ssh.user}
-    privateInterface: ${host.privateInterface}
-%{ endfor ~}
+      address: 1.2.3.4
+      keyPath: /root/.ssh/id_rsa
+      port: 22
+      user: root
   ingressController:
     affinity:
       nodeAffinity: {}
@@ -127,11 +93,6 @@ spec:
       enableSslPassthrough: false
     nodePorts: {}
     ports: {}
-  k0rdent:
-    enabled: true
-    providers:
-      - name: cluster-api-provider-aws
-      - name: cluster-api-provider-k0sproject-k0smotron
   k8sProviderSpecs:
     dataDir: /var/lib/k0s
   kubelet:
@@ -152,10 +113,8 @@ spec:
       memory: 300Mi
   license:
     token: ""
-  metallb:
-    enabled: ${metallb_enabled}
   monitoring:
-    enableCAdvisor: true
+    enableCAdvisor: false
     grafana:
       ingress: {}
     prometheus: {}
@@ -181,15 +140,15 @@ spec:
       enabled: false
     nodePortRange: 32768-35535
     providers:
-      - enabled: true
-        extraConfig:
-          cidrV4: 192.168.0.0/16
-          linuxDataplane: Iptables
-          loglevel: Info
-        provider: calico
-      - enabled: false
-        provider: custom
-    serviceCIDR: ${network_cidr}
+    - enabled: true
+      extraConfig:
+        cidrV4: 192.168.0.0/16
+        linuxDataplane: Iptables
+        loglevel: Info
+      provider: calico
+    - enabled: false
+      provider: custom
+    serviceCIDR: 10.96.0.0/16
   nodeLocalDNS:
     enabled: false
     nodeLocalConfigPersist: false
@@ -223,7 +182,7 @@ spec:
       requests:
         cpu: 50m
         memory: 64Mi
-  version: ${version}
+  version: v4.2.0
   windows:
     gmsa:
       enabled: false

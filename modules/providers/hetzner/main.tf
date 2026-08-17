@@ -27,6 +27,26 @@ locals {
       ssh_user    = "root"
       default_int = "eth0"
     }
+    rhel86 = {
+      image       = "rocky-9"
+      ssh_user    = "root"
+      default_int = "eth0"
+    }
+    rhel83 = {
+      image       = "rocky-9"
+      ssh_user    = "root"
+      default_int = "eth0"
+    }
+    rhel88 = {
+      image       = "rocky-9"
+      ssh_user    = "root"
+      default_int = "eth0"
+    }
+    rhel79 = {
+      image       = "rocky-9"
+      ssh_user    = "root"
+      default_int = "eth0"
+    }
   }
 
   node_pools = [

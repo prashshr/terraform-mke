@@ -487,7 +487,7 @@ locals {
 
   mke4_tls_common_name = local.mke4_tls_enabled ? coalesce(
     try(local.mke4_tls.common_name, null),
-    local.cloudflare_record_name_mke4_ui
+    local.mke4_ui_domain
   ) : null
 
   mke4_tls_dir       = local.mke4_tls_enabled ? "${local.artifacts_dir}/tlscerts/mke4/${local.mke4_tls_common_name}" : "${local.artifacts_dir}/tlscerts/mke4"
@@ -628,7 +628,7 @@ locals {
   )
 
   launchpad_context = {
-    apiVersion           = "launchpad.mirantis.com/mke/v1.3"
+    apiVersion           = "launchpad.mirantis.com/mke/v1.6"
     kind                 = local.launchpad_kind
     cluster_name         = local.cluster_name
     admin_username       = var.admin_username
@@ -704,6 +704,8 @@ locals {
     local.hetzner_ingress_lb_ip != null ? [local.hetzner_ingress_lb_ip] : [],
     local.hetzner_api_lb_ip != null ? [local.hetzner_api_lb_ip] : [],
     local.hetzner_mke4_ui_lb_ip != null ? [local.hetzner_mke4_ui_lb_ip] : [],
+    [local.mke4_domain],
+    [local.mke4_ui_domain],
     [for host in local.all_hosts : try(host.public_dns, null)],
     [for host in local.all_hosts : host.name],
     [for host in local.all_hosts : host.public_ip],
@@ -725,6 +727,9 @@ locals {
       external_address = local.mke4_domain
       sans             = local.mkectl_sans
     }
+    gateway_http_node_port  = var.mke4_gateway_http_node_port
+    gateway_https_node_port = var.mke4_gateway_https_node_port
+    metallb_enabled         = var.mke4_metallb_enabled
     mke4_tls_present     = local.mke4_tls_present
     mke4_tls_common_name = local.mke4_tls_common_name
     mke4_tls_ca_pem      = local.mke4_tls_ca_pem
@@ -848,6 +853,26 @@ resource "cloudflare_record" "aws_mke4_ui" {
 
   zone_id         = local.cloudflare_zone_id
   name            = local.cloudflare_record_name_mke4_ui
+  type            = "CNAME"
+  content         = local.aws_mke4_ui_lb_dns
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "aws_mke4" {
+  # NOTE: allow_overwrite requires exact match on content AND TTL.
+  # If this fails with "didn't find an exact match", delete the
+  # existing record manually first: see CLAUDE.md for details.
+  count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_record_name_mke4 != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_record_name_mke4
   type            = "CNAME"
   content         = local.aws_mke4_ui_lb_dns
   ttl             = 300

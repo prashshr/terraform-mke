@@ -32,6 +32,30 @@ locals {
       ssh_user    = "ec2-user"
       default_int = "eth0"
     }
+    rhel86 = {
+      owner       = "309956199498"
+      name_filter = "RHEL-8.6*x86_64*"
+      ssh_user    = "ec2-user"
+      default_int = "eth0"
+    }
+    rhel83 = {
+      owner       = "309956199498"
+      name_filter = "RHEL-8.3*x86_64*"
+      ssh_user    = "ec2-user"
+      default_int = "eth0"
+    }
+    rhel88 = {
+      owner       = "309956199498"
+      name_filter = "RHEL-8.8*x86_64*"
+      ssh_user    = "ec2-user"
+      default_int = "eth0"
+    }
+    rhel79 = {
+      owner       = "309956199498"
+      name_filter = "RHEL-7.9*x86_64*"
+      ssh_user    = "ec2-user"
+      default_int = "eth0"
+    }
   }
 
   default_tags = merge(var.tags, {
@@ -228,6 +252,22 @@ resource "aws_security_group" "cluster" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "MSR4 HTTP NodePort"
+    from_port   = 34002
+    to_port     = 34002
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "MSR4 HTTPS NodePort"
+    from_port   = 34003
+    to_port     = 34003
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -392,11 +432,18 @@ resource "null_resource" "resize_root_volume" {
 
           # ---- non-LVM root (direct partition) ----
           if echo "$ROOT_DEV" | grep -qE '^/dev/(nvme|xd|sd)'; then
-            BASE_DEV=$(echo "$ROOT_DEV" | sed 's/[0-9]*$//')
+            BASE_DEV=$(echo "$ROOT_DEV" | sed -E 's/p?[0-9]+$//')
             PART_NUM=$(echo "$ROOT_DEV" | grep -oP '\d+$' || echo "")
             if [ -n "$PART_NUM" ]; then
               echo "Growing partition $PART_NUM on $BASE_DEV"
-              growpart "$BASE_DEV" "$PART_NUM" || echo "growpart failed (non-fatal)"
+              for n in 1 2 3 4 5 6; do
+                if growpart "$BASE_DEV" "$PART_NUM" 2>&1; then
+                  echo "growpart succeeded"
+                  break
+                fi
+                [ "$n" -lt 6 ] && echo "growpart failed (attempt $n/6), retrying in 10s..." && sleep 10
+              done
+              partx -u "$BASE_DEV" 2>/dev/null || true
             fi
             FS_TYPE=$(blkid -o value -s TYPE "$ROOT_DEV" 2>/dev/null)
             case "$FS_TYPE" in
