@@ -14,7 +14,7 @@ output "launchpad_config_path" {
 }
 
 output "mke4_config_path" {
-  description = "Path to the rendered mkectl config."
+  description = "Path to the rendered mkectl config (version-specific)."
   value       = local.should_render ? local_sensitive_file.mke4[0].filename : null
 }
 

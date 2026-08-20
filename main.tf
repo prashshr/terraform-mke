@@ -779,7 +779,7 @@ resource "local_sensitive_file" "launchpad" {
 resource "local_sensitive_file" "mke4" {
   count = local.should_render ? 1 : 0
 
-  filename             = "${local.config_dir}/mke4.yaml"
+  filename             = "${local.config_dir}/mke4-v${local.mke4_version_major_minor}.yaml"
   file_permission      = "0600"
   directory_permission = "0700"
   content              = templatefile(local.mke4_template_path, local.mkectl_context)

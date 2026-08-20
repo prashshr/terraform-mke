@@ -96,8 +96,7 @@ mke4-apply:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	@test -f $(MKCTL_BIN) || artifacts/bin/download_mkectl.sh $(MKCTL_VERSION)
 	terraform apply -auto-approve -var "mke4_version=$(MKE4_VERSION)"
-	cp artifacts/configs/mke4.yaml artifacts/configs/mke4-v$(MKE4_VERSION).yaml
-	$(MKCTL_BIN) apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+	$(MKCTL_BIN) apply -f artifacts/configs/mke4-v$(MKE4_VERSION).yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
 
 mke4-upgrade-prereq:
 	./artifacts/scripts/mke3_upgrade_prereq.sh
