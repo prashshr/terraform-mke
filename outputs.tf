@@ -38,6 +38,16 @@ output "mke4_ui_domain" {
   value       = local.mke4_ui_domain
 }
 
+output "mke4_version" {
+  description = "Current MKE4 version configured."
+  value       = var.mke4_version
+}
+
+output "mke4_template_path" {
+  description = "Template file used for this MKE4 version."
+  value       = local.mke4_template_path
+}
+
 output "artifacts_directory" {
   description = "Absolute path to the artifacts directory."
   value       = local.artifacts_dir
