@@ -43,11 +43,6 @@ output "mke4_version" {
   value       = var.mke4_version
 }
 
-output "mke4_template_path" {
-  description = "Template file used for this MKE4 version."
-  value       = local.mke4_template_path
-}
-
 output "artifacts_directory" {
   description = "Absolute path to the artifacts directory."
   value       = local.artifacts_dir
