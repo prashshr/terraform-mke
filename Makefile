@@ -80,23 +80,24 @@ mke3:
 	launchpad apply -c artifacts/configs/launchpad.yaml --debug
 	launchpad client-config -c artifacts/configs/launchpad.yaml
 
-mke4:
-	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
-	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+mke4: MKE4_VERSION ?= 4.2.0
+mke4: mke4-apply
 
 mke4.1: MKE4_VERSION ?= 4.1.5
-mke4.1:
-	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
-	terraform apply -auto-approve -var "mke4_version=$(MKE4_VERSION)"
-	cp artifacts/configs/mke4.yaml artifacts/configs/mke4-v$(MKE4_VERSION).yaml
-	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+mke4.1: mke4-apply
 
 mke4.2: MKE4_VERSION ?= 4.2.0
-mke4.2:
+mke4.2: mke4-apply
+
+# Internal target: download mkectl, render config, apply
+mke4-apply: MKCTL_VERSION = $(MKE4_VERSION)
+mke4-apply: MKCTL_BIN = artifacts/bin/mkectl-v$(MKCTL_VERSION)
+mke4-apply:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	@test -f $(MKCTL_BIN) || artifacts/bin/download_mkectl.sh $(MKCTL_VERSION)
 	terraform apply -auto-approve -var "mke4_version=$(MKE4_VERSION)"
 	cp artifacts/configs/mke4.yaml artifacts/configs/mke4-v$(MKE4_VERSION).yaml
-	mkectl apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+	$(MKCTL_BIN) apply -f artifacts/configs/mke4.yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
 
 mke4-upgrade-prereq:
 	./artifacts/scripts/mke3_upgrade_prereq.sh
@@ -108,6 +109,7 @@ mkectl-upgrade:
 	  --hosts-path "$$MKCTL_UPGRADE_HOSTS_PATH" \
 	  --mke3-admin-username "$$MKCTL_UPGRADE_ADMIN_USERNAME" \
 	  --mke3-admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" \
+	  --mke3-external-address "$$MKCTL_MKE3_EXTERNAL_ADDRESS" \
 	  --external-address "$$MKCTL_UPGRADE_EXTERNAL_ADDRESS" \
 	  -l debug \
 	  --skip-cpu-cores-check \

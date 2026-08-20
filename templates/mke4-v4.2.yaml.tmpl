@@ -127,11 +127,7 @@ spec:
       enableSslPassthrough: false
     nodePorts: {}
     ports: {}
-  k0rdent:
-    enabled: true
-    providers:
-      - name: cluster-api-provider-aws
-      - name: cluster-api-provider-k0sproject-k0smotron
+  k0rdent: {}
   k8sProviderSpecs:
     dataDir: /var/lib/k0s
   kubelet:
@@ -155,7 +151,7 @@ spec:
   metallb:
     enabled: ${metallb_enabled}
   monitoring:
-    enableCAdvisor: true
+    enableCAdvisor: false
     grafana:
       ingress: {}
     prometheus: {}
@@ -183,13 +179,13 @@ spec:
     providers:
       - enabled: true
         extraConfig:
-          cidrV4: 192.168.0.0/16
+          cidrV4: ${network_cidr}
           linuxDataplane: Iptables
           loglevel: Info
         provider: calico
       - enabled: false
         provider: custom
-    serviceCIDR: ${network_cidr}
+    serviceCIDR: 10.96.0.0/16
   nodeLocalDNS:
     enabled: false
     nodeLocalConfigPersist: false

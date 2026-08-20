@@ -78,19 +78,19 @@ variable "mke4_version" {
 }
 
 variable "mke4_ui_backend_port" {
-  description = "Backend target port for the MKE4 UI load balancer. Ports 33000-33001 are reserved for MKE3 ingress during MKE3→MKE4 upgrades."
+  description = "Backend target port for the MKE4 UI NLB target group. Must match the NodePort used by the cluster's ingress/gateway."
   type        = number
   default     = 34001
 }
 
 variable "mke4_gateway_http_node_port" {
-  description = "Gateway HTTP node port passed to mkectl upgrade. Ports 33000-33001 are reserved for MKE3 ingress."
+  description = "Gateway HTTP NodePort in mke4.yaml."
   type        = number
   default     = 34000
 }
 
 variable "mke4_gateway_https_node_port" {
-  description = "Gateway HTTPS node port passed to mkectl upgrade. Ports 33000-33001 are reserved for MKE3 ingress."
+  description = "Gateway HTTPS NodePort in mke4.yaml."
   type        = number
   default     = 34001
 }

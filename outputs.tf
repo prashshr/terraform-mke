@@ -29,8 +29,13 @@ output "mke4_upgrade_env_path" {
 }
 
 output "mke4_external_address" {
-  description = "External address to use for mkectl upgrade."
-  value       = local.mkectl_upgrade_external_host
+  description = "External address for MKE4 API server."
+  value       = local.mkectl_api_external_host
+}
+
+output "mke4_ui_domain" {
+  description = "FQDN for MKE4 UI."
+  value       = local.mke4_ui_domain
 }
 
 output "artifacts_directory" {
