@@ -16,6 +16,7 @@ SHELL := /bin/bash
 CLUSTER_TYPE    ?= mke4
 MKE3_VERSION    ?= 3.8.11
 MKE4_VERSION    ?= 4.2.0
+MCR_VERSION     ?= 25.0.13
 ADMIN_PASSWORD  ?= mkepassword
 
 # -- MSR4 targets -----------------------------------------------------------------
@@ -84,6 +85,7 @@ generate-msr-values:
 export YES
 export LOG
 export ADMIN_PASSWORD
+export MCR_VERSION
 mkestack:
 	@./artifacts/scripts/mkestack.sh
 
