@@ -50,6 +50,8 @@ spec:
 %{ if san != null ~}
       - --san=${san}
 %{ endif ~}
+    upgradeFlags:
+      - --force-minimums
 %{ if mke_ca_cert_path != null ~}
     caCertPath: ${mke_ca_cert_path}
     certPath: ${mke_cert_path}

@@ -1,7 +1,22 @@
 SHELL := /bin/bash
 
 .PHONY: init plan apply destroy mke3 mke4 mke4.1 mke4.2 mke4-upgrade-prereq mkectl-upgrade nuke-mke \
-        msr4 msr4-clean generate-msr-values
+        msr4 msr4-clean generate-msr-values mkestack
+
+# -- Cluster version selection --------------------------------------------------
+# CLUSTER_TYPE: "mke3" or "mke4" (default: from terraform.tfvars or "mke4")
+# MKE3_VERSION: MKE3/Launchpad version (default: 3.8.11)
+# MKE4_VERSION: MKE4/mkectl version (default: 4.2.0)
+#
+# Examples:
+#   make apply                              # uses default from tfvars
+#   make apply CLUSTER_TYPE=mke3            # install MKE3
+#   make apply CLUSTER_TYPE=mke4 MKE4_VERSION=4.1.5  # install MKE4 4.1.x
+#   make apply CLUSTER_TYPE=mke4 MKE4_VERSION=4.2.0  # install MKE4 4.2.x
+CLUSTER_TYPE    ?= mke4
+MKE3_VERSION    ?= 3.8.11
+MKE4_VERSION    ?= 4.2.0
+ADMIN_PASSWORD  ?= mkepassword
 
 # -- MSR4 targets -----------------------------------------------------------------
 # Variables (all optional):
@@ -45,7 +60,7 @@ msr4:
 	  $(if $(CUSTOM_VALUES),--values "$(CUSTOM_VALUES)") \
 	  $(if $(filter true,$(MSR4_YES)),--yes)
 
-msr4-clean:
+msr4-cleanup:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	@if kubectl get namespace msr4 &>/dev/null; then \
 	  echo "Removing MSR4 Helm release..."; \
@@ -60,6 +75,18 @@ msr4-clean:
 generate-msr-values:
 	./artifacts/scripts/generate_msr_values.sh "$(MSR4_VERSION)"
 
+# -- MKE Stack: full cluster build ────────────────────────────────────────────
+#   make mkestack
+#   YES=1 make mkestack
+#   YES=1 LOG=1 make mkestack
+#   MKE_VERSION=4.2.0 make mkestack
+#   MKE_VERSION=4.2.0 MSR_VERSION=4.13.5 YES=1 LOG=1 make mkestack
+export YES
+export LOG
+export ADMIN_PASSWORD
+mkestack:
+	@./artifacts/scripts/mkestack.sh
+
 # -- Core targets -----------------------------------------------------------------
 
 init:
@@ -70,33 +97,45 @@ plan:
 	terraform plan
 
 apply:
-	terraform apply -auto-approve
+	terraform apply -auto-approve \
+	  -var "cluster_type=$(CLUSTER_TYPE)" \
+	  $(if $(filter mke3,$(CLUSTER_TYPE)),-var "mke3_version=$(MKE3_VERSION)") \
+	  $(if $(filter mke4,$(CLUSTER_TYPE)),-var "mke4_version=$(MKE4_VERSION)")
 
 destroy:
 	@terraform state list | rg '^acme_certificate\.' | xargs -r terraform state rm
 	terraform destroy
 
-mke3:
+mke3: CLUSTER_TYPE=mke3
+mke3: mke3-apply
+
+mke3-apply:
+	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
+	terraform apply -auto-approve -var "cluster_type=mke3" -var "mke3_version=$(MKE3_VERSION)"
 	launchpad apply -c artifacts/configs/launchpad.yaml --debug
 	launchpad client-config -c artifacts/configs/launchpad.yaml
 
+mke4: CLUSTER_TYPE=mke4
 mke4: MKE4_VERSION ?= 4.2.0
 mke4: mke4-apply
 
-mke4.1: MKE4_VERSION ?= 4.1.5
+mke4.1: CLUSTER_TYPE=mke4
+mke4.1: MKE4_VERSION = 4.1.5
 mke4.1: mke4-apply
 
-mke4.2: MKE4_VERSION ?= 4.2.0
+mke4.2: CLUSTER_TYPE=mke4
+mke4.2: MKE4_VERSION = 4.2.0
 mke4.2: mke4-apply
 
 # Internal target: download mkectl, render config, apply
 mke4-apply: MKCTL_VERSION = $(MKE4_VERSION)
 mke4-apply: MKCTL_BIN = artifacts/bin/mkectl-v$(MKCTL_VERSION)
+mke4-apply: MKE4_FILE_VERSION = $(shell echo $(MKE4_VERSION) | cut -d. -f1-2)
 mke4-apply:
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	@test -f $(MKCTL_BIN) || artifacts/bin/download_mkectl.sh $(MKCTL_VERSION)
-	terraform apply -auto-approve -var "mke4_version=$(MKE4_VERSION)"
-	$(MKCTL_BIN) apply -f artifacts/configs/mke4-v$(MKE4_VERSION).yaml --admin-password "$$MKCTL_UPGRADE_ADMIN_PASSWORD" -l debug
+	terraform apply -auto-approve -var "cluster_type=mke4" -var "mke4_version=$(MKE4_VERSION)"
+	$(MKCTL_BIN) apply -f artifacts/configs/mke4-v$(MKE4_FILE_VERSION).yaml --admin-password "$(ADMIN_PASSWORD)" -l debug
 
 mke4-upgrade-prereq:
 	./artifacts/scripts/mke3_upgrade_prereq.sh

@@ -237,7 +237,63 @@ resource "aws_security_group" "cluster" {
   }
 
   ingress {
-    description = "MKE ingress HTTPS NodePort"
+    description = "Calico VXLAN overlay"
+    from_port   = 4789
+    to_port     = 4789
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Calico BGP"
+    from_port   = 179
+    to_port     = 179
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Calico Typha"
+    from_port   = 5473
+    to_port     = 5473
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "k0s controller join API"
+    from_port   = 9443
+    to_port     = 9443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "kubelet API"
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "mkectl networking checks"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Ingress HTTP NodePort"
+    from_port   = 33000
+    to_port     = 33000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Ingress HTTPS NodePort"
     from_port   = 33001
     to_port     = 33001
     protocol    = "tcp"

@@ -10,6 +10,8 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+tfplan
+tfplan.*
 
 # Local Terraform variables and credentials
 terraform.tfvars
@@ -26,6 +28,7 @@ credentials/
 # Local artifacts and generated files
 artifacts/
 artifacts/tlscerts/
+logs/
 *.log
 *.bak
 *.swp

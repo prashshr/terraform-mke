@@ -4,6 +4,17 @@ variable "cluster_name" {
   default     = "ps-mke"
 }
 
+variable "cluster_type" {
+  description = "Cluster type to install. Options: mke3 (Launchpad/MKE 3.x), mke4 (mkectl/MKE 4.x)."
+  type        = string
+  default     = "mke4"
+
+  validation {
+    condition     = contains(["mke3", "mke4"], var.cluster_type)
+    error_message = "cluster_type must be 'mke3' or 'mke4'."
+  }
+}
+
 variable "root_domain" {
   description = "Primary DNS domain used for application hostnames."
   type        = string
@@ -228,6 +239,8 @@ variable "aws_settings" {
     resource_prefix         = optional(string)
     cluster_name            = optional(string)
     vpc_cidr                = optional(string)
+    pod_cidr                = optional(string)
+    service_cidr            = optional(string)
     availability_zones      = optional(list(string))
     ssh_key_prefix          = optional(string)
     node_pools = optional(list(object({

@@ -692,7 +692,8 @@ locals {
   mke4_template_path = fileexists("${path.module}/templates/mke4-v${local.mke4_version_major_minor}.yaml.tmpl") ? "${path.module}/templates/mke4-v${local.mke4_version_major_minor}.yaml.tmpl" : "${path.module}/templates/mke4-v4.2.yaml.tmpl"
 
   mkectl_cloud_provider    = try(local.all_hosts[0].provider, "aws")
-  mkectl_network_cidr      = local.aws_enabled ? local.aws_settings_map.vpc_cidr : "192.168.0.0/16"
+  mkectl_network_cidr      = local.aws_enabled ? local.aws_settings_map.pod_cidr : "192.168.0.0/16"
+  mkectl_service_cidr      = local.aws_enabled ? local.aws_settings_map.service_cidr : "10.96.0.0/16"
   mkectl_api_external_host = local.mke4_domain
   mkectl_upgrade_external_host = coalesce(
     local.aws_mke4_ui_lb_dns,
@@ -727,6 +728,7 @@ locals {
     hosts          = local.mkectl_hosts
     cloud_provider = local.mkectl_cloud_provider
     network_cidr   = local.mkectl_network_cidr
+    service_cidr   = local.mkectl_service_cidr
     api_server = {
       external_address = local.mke4_domain
       sans             = local.mkectl_sans
@@ -766,7 +768,7 @@ locals {
 }
 
 resource "local_sensitive_file" "launchpad" {
-  count = local.should_render ? 1 : 0
+  count = local.render_mke3 ? 1 : 0
 
   filename             = "${local.config_dir}/launchpad.yaml"
   file_permission      = "0600"
@@ -777,7 +779,7 @@ resource "local_sensitive_file" "launchpad" {
 }
 
 resource "local_sensitive_file" "mke4" {
-  count = local.should_render ? 1 : 0
+  count = local.render_mke4 ? 1 : 0
 
   filename             = "${local.config_dir}/mke4-v${local.mke4_version_major_minor}.yaml"
   file_permission      = "0600"

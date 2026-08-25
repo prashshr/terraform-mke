@@ -144,7 +144,7 @@ spec:
         provider: calico
       - enabled: false
         provider: custom
-    serviceCIDR: 10.96.0.0/16
+    serviceCIDR: ${service_cidr}
   policyController:
     opaGatekeeper:
       enabled: false

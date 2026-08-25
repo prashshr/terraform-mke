@@ -1,142 +1,116 @@
 # terraform-ps
 
-Terraform for provisioning MKE infrastructure on AWS or Hetzner and generating the config files used for:
+Terraform for provisioning MKE3/MKE4 infrastructure on AWS and deploying Mirantis Secure Registry (MSR4).
 
-- MKE3 deployment via Launchpad
-- MKE4 deployment via `mkectl`
-- MKE3 -> MKE4 upgrade via `mkectl upgrade`
+## Prerequisites
 
-## Start here
+- Terraform >= 1.0
+- AWS CLI configured with valid credentials
+- `jq`, `yq`, `helm`, `kubectl` installed
 
-Normal workflow:
+## Quick Start
+
+### 1. Set up credentials
+
+```bash
+mkdir -p credentials
+aws sts get-session-token --duration-seconds 3600 > /tmp/creds.json
+```
+
+Create `credentials/aws-profile`:
+
+```ini
+[default]
+aws_access_key_id = <from /tmp/creds.json>
+aws_secret_access_key = <from /tmp/creds.json>
+aws_session_token = <from /tmp/creds.json>
+```
+
+### 2. Configure
+
+Edit `terraform.tfvars` with your settings:
+
+```hcl
+cluster_name     = "ps-mke"
+resource_prefix  = "ps-mke-aws"
+root_domain      = "samkhya.cloud"
+cluster_type     = "mke4"
+mke4_version     = "4.2.0"
+admin_password   = "your-secure-password"
+
+node_pools = [
+  { name = "manager", count = 1, roles = ["manager"], instance_type = "m6id.xlarge" },
+  { name = "worker",  count = 2, roles = ["worker"],  instance_type = "m6id.large" },
+  { name = "msr",     count = 2, roles = ["msr"],     instance_type = "m6id.large" },
+]
+```
+
+### 3. Deploy
+
+Full lifecycle (destroy existing, create new, install MKE):
+
+```bash
+make mkestack                           # interactive prompts
+YES=1 make mkestack                     # skip prompts
+ADMIN_PASSWORD=secret YES=1 make mkestack  # custom password
+```
+
+Or step-by-step:
 
 ```bash
 make init
-make plan
 make apply
-make mke3
-make mke3-upgrade-prereq
-make mkectl-upgrade
-make mkectl
-make destroy
+make mke4                               # installs MKE4
 ```
 
-What these do:
+### 4. Access
 
-- `make init`
-  - initializes Terraform
-  - regenerates `artifacts/configs/hosts.yaml` from existing state if present
-- `make plan`
-  - shows infra changes
-- `make apply`
-  - applies infra changes
-  - renders config artifacts
-- `make mke3`
-  - Install MKE3 using `artifacts/config/launchpad.yaml`
-- `make mke3-upgrade-prereq`
-  - updates MKE3 config so `calico_kdd = true`
-- `make mkectl-upgrade`
-  - upgrades MKE3 to MKE4
-- `make mkectl`
-  - Install MKE using `artifacts/config/mke4.yaml`
-- `make destroy`
-  - destroys terraform managed infrastructure resources
+- **MKE4 UI**: `https://mke4-ui.<root_domain>`
+- **kubectl**: `kubectl --kubeconfig artifacts/configs/kubeconfig.yaml get pods -A`
+- **Credentials**: admin / password set in `terraform.tfvars`
 
-## What it creates
-
-Infrastructure:
-- nodes for `manager`, `worker`, and optional `msr`
-- load balancers
-- SSH keys under `artifacts/ssh`
-
-Config files:
-- `artifacts/configs/launchpad.yaml`
-- `artifacts/configs/mke4.yaml`
-- `artifacts/configs/hosts.yaml`
-- `artifacts/configs/mkectl-upgrade.env`
-
-## Load balancer layout
-
-Current layout is split by purpose:
-
-- MKE3 UI
-  - `443 -> 443`
-- Ingress
-  - `443 -> 33001`
-- Kubernetes API
-  - `6443 -> 6443`
-- MKE4 UI
-  - `443 -> 34001` by default
-- MSR
-  - `443 -> 443` when MSR nodes are enabled
-
-`mke4_ui_backend_port` is configurable in `terraform.tfvars`.
-
-## Main files
-
-- `terraform.tfvars`
-  - cluster name, versions, node pools, provider settings
-- `main.tf`
-  - shared orchestration and rendered artifacts
-- `modules/providers/aws`
-  - AWS infrastructure
-- `modules/providers/hetzner`
-  - Hetzner infrastructure
-- `templates/launchpad.yaml.tmpl`
-  - MKE3 config template
-- `templates/mke4.yaml.tmpl`
-  - MKE4 config template
-- `scripts/mke3_upgrade_prereq.sh`
-  - sets `calico_kdd = true` on the running MKE3 cluster before upgrade
-
-## Required local files
-
-- AWS credentials:
-  - `credentials/aws-profile`
-- Hetzner token:
-  - `credentials/hetzner.token`
-
-Keep these local. Do not commit credentials, state, SSH keys, or rendered artifacts.
-
-
-## Important values in `terraform.tfvars`
-
-Top-level:
-
-```hcl
-admin_username               = "admin"
-admin_password               = "mkepassword"
-mke3_version                 = "3.8.7"
-mke4_version                 = "4.1.5"
-mke4_ui_backend_port         = 34001
-mke4_gateway_http_node_port  = 34000
-mke4_gateway_https_node_port = 34001
-enable_msr                   = true
-```
-
-Notes:
-- `admin_password` is used for both rendered MKE3 and MKE4 configs
-- `mke4_ui_backend_port` controls the MKE4 UI LB backend port
-- `enable_msr = true` is required if you want a populated MSR section in `launchpad.yaml`
-
-## Generated upgrade env file
-
-`artifacts/configs/mkectl-upgrade.env` is generated from Terraform values and contains:
-
-- `MKCTL_UPGRADE_HOSTS_PATH`
-- `MKCTL_UPGRADE_ADMIN_USERNAME`
-- `MKCTL_UPGRADE_ADMIN_PASSWORD`
-- `MKCTL_MKE3_EXTERNAL_ADDRESS`
-- `MKCTL_UPGRADE_EXTERNAL_ADDRESS`
-- `MKCTL_UPGRADE_GATEWAY_HTTP_NODE_PORT`
-- `MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT`
-
-`make mkectl-upgrade` reads this file automatically.
-
-## Destroy
+### 5. Deploy MSR4 (optional)
 
 ```bash
-make destroy
+make msr4
+make msr4 MSR4_HA=true    # high availability mode
 ```
 
-If Cloudflare is enabled and managed records use `prevent_destroy`, Terraform may refuse to remove them automatically.
+## Make Targets
+
+| Target | Description |
+|--------|-------------|
+| `make mkestack` | Full lifecycle: destroy, init, apply, install MKE |
+| `make init` | Terraform init |
+| `make plan` | Show infrastructure changes |
+| `make apply` | Apply infrastructure changes |
+| `make destroy` | Destroy all infrastructure |
+| `make mke3` | Install MKE3 via Launchpad |
+| `make mke4` | Install MKE4 via mkectl |
+| `make msr4` | Install MSR4 via Helm |
+
+## Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADMIN_PASSWORD` | `mkepassword` | MKE admin password (env or flag) |
+| `CLUSTER_TYPE` | `mke4` | `mke3` or `mke4` |
+| `MKE4_VERSION` | `4.2.0` | MKE4 version |
+| `MSR_VERSION` | `4.13.5` | MSR4 Helm chart version |
+
+## Generated Files
+
+These are created by `make apply` and should not be committed:
+
+- `artifacts/configs/kubeconfig.yaml`
+- `artifacts/configs/mke4-*.yaml`
+- `artifacts/ssh/*.pem`
+- `terraform.tfstate`
+
+## Architecture
+
+- 1 manager node (control plane)
+- 2 worker nodes
+- 2 MSR nodes (container registry)
+- NLBs for: MKE4 UI, Ingress, MSR4
+- Calico CNI with VXLAN overlay

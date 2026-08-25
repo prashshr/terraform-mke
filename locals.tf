@@ -10,6 +10,8 @@ locals {
       resource_prefix         = var.cluster_name
       cluster_name            = var.cluster_name
       vpc_cidr                = "10.40.0.0/16"
+      pod_cidr                = "10.42.0.0/16"
+      service_cidr            = "10.97.0.0/16"
       availability_zones      = ["eu-west-1a", "eu-west-1b"]
       ssh_key_prefix          = var.cluster_name
       node_pools              = []
@@ -219,4 +221,9 @@ locals {
   config_dir    = "${local.artifacts_dir}/configs"
 
   launchpad_kind = var.enable_msr ? "mke+msr" : "mke"
+
+  # Cluster type determines which config to render
+  cluster_type = var.cluster_type
+  render_mke3  = local.should_render && local.cluster_type == "mke3"
+  render_mke4  = local.should_render && local.cluster_type == "mke4"
 }
