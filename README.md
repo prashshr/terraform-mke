@@ -50,9 +50,7 @@ node_pools = [
 Full lifecycle (destroy existing, create new, install MKE):
 
 ```bash
-make mkestack                           # interactive prompts
-YES=1 make mkestack                     # skip prompts
-ADMIN_PASSWORD=secret YES=1 make mkestack  # custom password
+MKE_VERSION=4.2.0 MSR_VERSION=4.13.5 YES=1 make mkestack
 ```
 
 Or step-by-step:
