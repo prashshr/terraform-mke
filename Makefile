@@ -1,7 +1,8 @@
 SHELL := /bin/bash
 
 .PHONY: init plan apply destroy mke3 mke4 mke4.1 mke4.2 mke4-upgrade-prereq mkectl-upgrade nuke-mke \
-        msr4 msr4-clean generate-msr-values mkestack help
+        msr4 msr4-clean generate-msr-values mkestack help \
+        config-apply config-get config-edit
 
 # -- Default target -------------------------------------------------------------
 .DEFAULT_GOAL := help
@@ -35,6 +36,16 @@ help: ## Show this help
 	@echo "  MKE_VERSION=4.2.0 MSR_VERSION=4.13.6 YES=1 make mkestack"
 	@echo "  make msr4 MSR4_VERSION=4.13.6 MSR4_YES=true"
 	@echo ""
+
+# -- Config management ---------------------------------------------------------
+config-apply: ## Generate terraform.tfvars from config file
+	python3 scripts/write_tfvars.py config terraform.tfvars
+
+config-get: ## Show current config
+	@source scripts/config_parser.sh && show_config
+
+config-edit: ## Open config file in editor
+	$${EDITOR:-vi} config
 
 # -- Cluster version selection --------------------------------------------------
 # CLUSTER_TYPE: "mke3" or "mke4" (default: from terraform.tfvars or "mke4")

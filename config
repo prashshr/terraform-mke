@@ -1,0 +1,92 @@
+# ─── config ────────────────────────────────────────────────────────────────
+# Single source of truth for cluster configuration.
+# Used by: terraform.tfvars generation, Makefile, deployment scripts
+#
+# Edit this file, then run: make config-apply
+# ──────────────────────────────────────────────────────────────────────────
+
+# ── Cluster ─────────────────────────────────────────────────────────────────
+CLUSTER_NAME="ps-mke"
+CLUSTER_TYPE="mke4"
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD="mkepassword"
+
+# ── Versions ────────────────────────────────────────────────────────────────
+MKE3_VERSION="3.8.7"
+MKE4_VERSION="4.2.0"
+MSR_VERSION="2.9.11"
+MCR_VERSION="29.6.1"
+
+# ── MKE4 Node Ports ────────────────────────────────────────────────────────
+MKE4_UI_BACKEND_PORT=34001
+MKE4_GATEWAY_HTTP_NODE_PORT=34000
+MKE4_GATEWAY_HTTPS_NODE_PORT=34001
+
+# ── AWS ─────────────────────────────────────────────────────────────────────
+AWS_ENABLED=true
+AWS_REGION="eu-west-1"
+AWS_PROFILE="437775732836_IAM_config_access"
+AWS_CREDENTIALS_FILE="credentials/aws-profile"
+AWS_ROOT_VOLUME_SIZE=120
+
+# AWS node pools (space-separated list of pool definitions)
+# Format: NAME:ROLES:OS:INSTANCE_TYPE:COUNT
+AWS_NODE_POOLS="aws-manager:manager:rhel96:m6id.xlarge:1 aws-worker:worker:rhel96:m6id.large:1 aws-msr:msr:rhel96:m6id.large:3"
+
+# ── Hetzner ─────────────────────────────────────────────────────────────────
+HETZNER_ENABLED=false
+HETZNER_LOCATION="fsn1"
+HETZNER_CREDENTIALS_FILE="credentials/hetzner.token"
+HETZNER_CREATE_NETWORK=true
+HETZNER_NETWORK_CIDR="10.42.0.0/16"
+HETZNER_SUBNET_CIDR="10.42.0.0/24"
+HETZNER_NETWORK_ZONE="eu-central"
+
+# Hetzner node pools
+# Format: NAME:ROLES:OS:SERVER_TYPE:COUNT[:PRIVATE_INTERFACE]
+HETZNER_NODE_POOLS="ps-hz-manager:manager:ubuntu2204:cx23:1:enp7s0 ps-hz-worker:worker:ubuntu2204:cx23:1:enp7s0 ps-hz-msr:msr:ubuntu2204:cx23:1:enp7s0"
+
+# ── Domains ─────────────────────────────────────────────────────────────────
+ROOT_DOMAIN="samkhya.cloud"
+APP_DOMAIN_MKE3="mke3test"
+APP_DOMAIN_MKE4="mke4test"
+APP_DOMAIN_INGRESS="ingtest"
+APP_DOMAIN_MSR="msrtest"
+APP_DOMAIN_MSR4="msr4"
+
+# ── TLS ─────────────────────────────────────────────────────────────────────
+TLS_EMAIL="ops@samkhya.cloud"
+TLS_ACME_ENABLED=true
+
+# TLS subsystems (true/false)
+MKE3_TLS_ENABLED=true
+MKE4_TLS_ENABLED=true
+INGRESS_TLS_ENABLED=true
+MSR_TLS_ENABLED=true
+MSR4_TLS_ENABLED=true
+
+# ── Cloudflare ──────────────────────────────────────────────────────────────
+CLOUDFLARE_ENABLED=true
+CLOUDFLARE_ZONE_NAME="samkhya.cloud"
+CLOUDFLARE_API_TOKEN=""
+
+# ── Features ────────────────────────────────────────────────────────────────
+NFS_ENABLED=false
+AIRGAP_ENABLED=false
+KOF_ENABLED=false
+KOF_PROFILE="lean"
+K0RDENT_UI_ENABLED=false
+MONITORING_ENABLED=false
+EXPIRY_DAYS=0
+
+# ── MSR4 (Helm) ────────────────────────────────────────────────────────────
+MSR4_HA=false
+MSR4_VERSION="4.13.5"
+MSR4_HTTP_NODE_PORT=34002
+MSR4_HTTPS_NODE_PORT=34003
+MSR4_METRICS_NODE_PORT=34004
+
+# ── Misc ────────────────────────────────────────────────────────────────────
+ENABLE_MSR=true
+ARTIFACTS_DIR=""
+SAN_OVERRIDE=""
