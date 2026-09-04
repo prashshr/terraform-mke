@@ -236,4 +236,14 @@ nuke-mke: ## Cleanup MKE from all nodes
 msr4-dummy-data: ## Populate MSR4 with test data
 	./artifacts/scripts/msr4-dummy-data.sh
 
+# ── Airgap tunnels ────────────────────────────────────────────────────────
+tunnel-open: ## Open SSH tunnels to cluster services
+	./scripts/tunnel.sh open
+
+tunnel-close: ## Close all SSH tunnels
+	./scripts/tunnel.sh close
+
+tunnel-status: ## Show active SSH tunnels
+	./scripts/tunnel.sh status
+
 

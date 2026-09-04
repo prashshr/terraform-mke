@@ -76,6 +76,12 @@ variable "enable_msr" {
   default     = false
 }
 
+variable "airgap_enabled" {
+  description = "Enable airgap mode with bastion host for offline deployments."
+  type        = bool
+  default     = false
+}
+
 variable "mke3_version" {
   description = "Launchpad (MKE 3.x) version."
   type        = string
