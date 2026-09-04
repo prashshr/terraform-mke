@@ -14,14 +14,21 @@ Terraform module for deploying MKE (Mirantis Kubernetes Engine) clusters on AWS 
 
 ```
 terraform-ps/
-├── main.tf                    # TLS, module calls, templates, Cloudflare DNS (1,001 lines)
-├── locals.tf                  # Provider defaults, domains, host aggregation (233 lines)
-├── variables.tf               # All input variables (360 lines)
+├── main.tf                    # Module calls + aggregation locals (~230 lines)
+├── tls.tf                     # TLS resources + locals (~550 lines)
+├── dns.tf                     # Cloudflare DNS records (~190 lines)
+├── templates.tf               # Sensitive file rendering (~55 lines)
+├── airgap.tf                  # Bastion host, EIP, security group
+├── nfs.tf                     # Dedicated NFS server with EBS
+├── expiry.tf                  # Auto-expiry with Terraform output warnings
+├── locals.tf                  # Provider defaults, domains, common_tags (240 lines)
+├── variables.tf               # All input variables (370 lines)
 ├── outputs.tf                 # Terraform outputs (49 lines)
-├── providers.tf               # AWS, Hetzner, Cloudflare, TLS, ACME providers (43 lines)
-├── versions.tf                # Terraform and provider version constraints (38 lines)
+├── providers.tf               # AWS, Hetzner, Cloudflare, TLS, ACME, time providers
+├── versions.tf                # Terraform and provider version constraints
 ├── checks.tf                  # Pre-apply validation checks (55 lines)
-├── Makefile                   # All build targets (228 lines)
+├── config                     # Single source of truth (bash-sourceable)
+├── Makefile                   # All build targets (~260 lines)
 ├── templates/
 │   ├── launchpad.yaml.tmpl    # MKE3 Launchpad config
 │   ├── mke4-v4.1.yaml.tmpl   # MKE4 v4.1.x config (ingressController)
@@ -30,6 +37,9 @@ terraform-ps/
 ├── modules/providers/aws/     # AWS: VPC, subnets, SGs, instances, NLBs (877 lines)
 ├── modules/providers/hetzner/ # Hetzner: servers, network, firewall, LBs (464 lines)
 ├── scripts/
+│   ├── config_parser.sh       # Load config with env var overrides + timing helpers
+│   ├── write_tfvars.py        # Generate terraform.tfvars from config
+│   ├── tunnel.sh              # SSH tunnel management for airgap clusters
 │   ├── tls_cert_status.sh     # Check existing TLS cert validity
 │   └── write_tls_cert.sh      # Write TLS cert files to disk
 ├── artifacts/
@@ -37,6 +47,8 @@ terraform-ps/
 │   │   ├── mkestack.sh        # Full lifecycle: destroy → init → apply → install
 │   │   ├── mkeupgrade.sh      # Upgrade orchestration (MKE3→MKE4, minor, MSR)
 │   │   ├── install_msr4.sh    # MSR4 Helm install with NFS setup
+│   │   ├── install_kof.sh     # KOF Helm install (MKE4 only, lean/full profiles)
+│   │   ├── install_k0rdent_ui.sh  # k0rdent-ui Helm install (MKE4 only)
 │   │   ├── nfs_setup.sh       # NFS client package installation
 │   │   ├── generate_msr_values.sh  # Generate MSR4 Helm values
 │   │   └── download_mkectl.sh # Download mkectl binary
@@ -157,6 +169,17 @@ make mke4 CLUSTER_TYPE=mke4   # Install MKE4
 make msr4              # Install MSR4
 make upgrade           # Upgrade MKE/MSR versions
 make msr4-cleanup      # Remove MSR4
+make kof               # Install KOF (MKE4 only)
+make kof-cleanup       # Remove KOF
+make k0rdent-ui        # Install k0rdent-ui (MKE4 only)
+make k0rdent-ui-cleanup # Remove k0rdent-ui
+make nfs-setup         # Setup NFS server
+make tunnel-open       # Open SSH tunnels (airgap)
+make tunnel-close      # Close all tunnels
+make tunnel-status     # Show active tunnels
+make config-apply      # Generate terraform.tfvars from config
+make config-get        # Show current config values
+make config-edit       # Open config in editor
 ```
 
 ### Testing New Features
