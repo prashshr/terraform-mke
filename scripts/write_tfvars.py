@@ -122,28 +122,27 @@ def generate_tfvars(config):
         lines.append('}')
         lines.append('')
 
-    # Hetzner settings
+    # Hetzner settings (always emit block, even when disabled)
     hz_enabled = config.get('HETZNER_ENABLED', 'false').lower() == 'true'
-    if hz_enabled:
-        hz_creds = config.get('HETZNER_CREDENTIALS_FILE', '')
-        hz_create_net = config.get('HETZNER_CREATE_NETWORK', 'true')
-        hz_node_pools = build_node_pools(config.get('HETZNER_NODE_POOLS', ''))
+    hz_creds = config.get('HETZNER_CREDENTIALS_FILE', '')
+    hz_create_net = config.get('HETZNER_CREATE_NETWORK', 'true')
+    hz_node_pools = build_node_pools(config.get('HETZNER_NODE_POOLS', ''))
 
-        lines.append('hetzner_settings = {')
-        lines.append('  enabled          = true')
-        lines.append(f'  location         = "{config.get("HETZNER_LOCATION", "fsn1")}"')
-        lines.append(f'  create_network   = {hz_create_net}')
-        lines.append(f'  network_cidr     = "{config.get("HETZNER_NETWORK_CIDR", "10.42.0.0/16")}"')
-        lines.append(f'  subnet_cidr      = "{config.get("HETZNER_SUBNET_CIDR", "10.42.0.0/24")}"')
-        lines.append(f'  network_zone     = "{config.get("HETZNER_NETWORK_ZONE", "eu-central")}"')
-        lines.append(f'  cluster_name     = "{config.get("CLUSTER_NAME", "ps-mke")}"')
-        lines.append(f'  ssh_key_prefix   = "{config.get("CLUSTER_NAME", "ps-mke")}"')
-        if hz_creds:
-            lines.append(f'  credentials_file = "{hz_creds}"')
-        lines.append(f'  labels           = {{}}')
-        lines.append(f'  node_pools = {hz_node_pools}')
-        lines.append('}')
-        lines.append('')
+    lines.append('hetzner_settings = {')
+    lines.append(f'  enabled          = {str(hz_enabled).lower()}')
+    lines.append(f'  location         = "{config.get("HETZNER_LOCATION", "fsn1")}"')
+    lines.append(f'  create_network   = {hz_create_net}')
+    lines.append(f'  network_cidr     = "{config.get("HETZNER_NETWORK_CIDR", "10.42.0.0/16")}"')
+    lines.append(f'  subnet_cidr      = "{config.get("HETZNER_SUBNET_CIDR", "10.42.0.0/24")}"')
+    lines.append(f'  network_zone     = "{config.get("HETZNER_NETWORK_ZONE", "eu-central")}"')
+    lines.append(f'  cluster_name     = "{config.get("CLUSTER_NAME", "ps-mke")}"')
+    lines.append(f'  ssh_key_prefix   = "{config.get("CLUSTER_NAME", "ps-mke")}"')
+    if hz_creds:
+        lines.append(f'  credentials_file = "{hz_creds}"')
+    lines.append(f'  labels           = {{}}')
+    lines.append(f'  node_pools = {hz_node_pools}')
+    lines.append('}')
+    lines.append('')
 
     # TLS blocks
     email = config.get('TLS_EMAIL', 'ops@samkhya.cloud')
