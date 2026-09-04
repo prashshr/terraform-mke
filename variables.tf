@@ -88,6 +88,18 @@ variable "nfs_enabled" {
   default     = false
 }
 
+variable "kof_enabled" {
+  description = "Enable KOF (KubeOnFlux) monitoring stack (MKE4 only)."
+  type        = bool
+  default     = false
+}
+
+variable "k0rdent_ui_enabled" {
+  description = "Enable k0rdent-ui for cluster management (MKE4 only)."
+  type        = bool
+  default     = false
+}
+
 variable "mke3_version" {
   description = "Launchpad (MKE 3.x) version."
   type        = string

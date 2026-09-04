@@ -25,7 +25,7 @@ MKE4_GATEWAY_HTTPS_NODE_PORT=34001
 # ── AWS ─────────────────────────────────────────────────────────────────────
 AWS_ENABLED=true
 AWS_REGION="eu-west-1"
-AWS_PROFILE="437775732836_IAM_config_access"
+AWS_PROFILE="437775732836_PowerUserAccess"
 AWS_CREDENTIALS_FILE="credentials/aws-profile"
 AWS_ROOT_VOLUME_SIZE=120
 
