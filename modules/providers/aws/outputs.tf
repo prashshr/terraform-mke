@@ -41,3 +41,23 @@ output "msr_lb_dns" {
 output "msr4_lb_dns" {
   value = try(aws_lb.msr4[0].dns_name, null)
 }
+
+output "vpc_id" {
+  value = try(aws_vpc.cluster.id, null)
+}
+
+output "vpc_cidr" {
+  value = try(aws_vpc.cluster.cidr_block, null)
+}
+
+output "public_subnet_ids" {
+  value = [for s in aws_subnet.public : s.id]
+}
+
+output "availability_zones" {
+  value = var.availability_zones
+}
+
+output "ssh_key_name" {
+  value = try(aws_key_pair.cluster.key_name, null)
+}

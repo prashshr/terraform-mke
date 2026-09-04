@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 source "${SCRIPT_DIR}/config_parser.sh"
-load_config "${REPO_DIR}/config"
+load_config "${REPO_DIR}/config.env"
 
 # Matte indicator bullets
 DOT_GREEN="\033[38;5;108m●\033[0m"
@@ -139,31 +139,36 @@ if [[ -f "$KCFG" ]]; then
     fi
 fi
 
-# Print Stack Header
+# Multi-line Stack Header
 echo ""
 echo "================================================================================================================"
-printf "  \033[1;36mSTACK:\033[0m %-16s \033[1;36mTYPE:\033[0m %-10s \033[1;36mHEALTH:\033[0m %b   \033[1;36mEXPIRY:\033[0m %s\n" \
-    "${CLUSTER_NAME:-ps-mke}" "${CLUSTER_TYPE_VAL}" "${K8S_HEALTH}" "${EXPIRY_WARN}"
+printf "  \033[1;36mSTACK:\033[0m   %-20s\n" "${CLUSTER_NAME:-ps-mke}"
+printf "  \033[1;36mTYPE:\033[0m    %-20s\n" "${CLUSTER_TYPE_VAL}"
+printf "  \033[1;36mHEALTH:\033[0m  %b\n" "${K8S_HEALTH}"
+printf "  \033[1;36mEXPIRY:\033[0m  %s\n" "${EXPIRY_WARN}"
 echo "================================================================================================================"
-printf "  \033[1m%-16s\033[0m %-35s (Dashboard: %b)\n" "MKE UI:" "${UI_URL}" "${UI_STATUS}"
-printf "  \033[1m%-16s\033[0m %-35s (API Server: %b)\n" "Kubernetes API:" "${API_URL}" "${API_STATUS}"
+echo -e "  \033[1mEndpoints & Services:\033[0m"
+printf "    • MKE UI:         %-35s (Dashboard: %b)\n" "${UI_URL}" "${UI_STATUS}"
+printf "    • Kubernetes API: %-35s (API Server: %b)\n" "${API_URL}" "${API_STATUS}"
 if [[ "$LIVE_MSR_VER" != "none" || "${MSR2_ENABLED:-false}" == "true" || "${MSR4_ENABLED:-false}" == "true" ]]; then
-    printf "  \033[1m%-16s\033[0m %-35s (Registry: %s)\n" "MSR Registry:" "${MSR_URL}" "${LIVE_MSR_VER}"
+    printf "    • MSR Registry:   %-35s (Registry: %s)\n" "${MSR_URL}" "${LIVE_MSR_VER}"
 fi
 echo "----------------------------------------------------------------------------------------------------------------"
-
-# Print Stack Versions Summary
+echo -e "  \033[1;33mStack Versions:\033[0m"
 if [[ "$CLUSTER_TYPE_VAL" == "mke4" ]]; then
     SAMPLE_K8S="v1.35.4+k0s"
     for k in "${!K8S_NODE_K8S_VER[@]}"; do
         SAMPLE_K8S="${K8S_NODE_K8S_VER[$k]}"
         break
     done
-    printf "  \033[1;33mStack Versions:\033[0m MKE: \033[38;5;108mv%s\033[0m | k0s/k8s: \033[38;5;108m%s\033[0m | Runtime: \033[38;5;108mcontainerd\033[0m | MSR4: \033[38;5;108m%s\033[0m\n" \
-        "${LIVE_MKE_VER}" "${SAMPLE_K8S}" "${LIVE_MSR_VER}"
+    printf "    • MKE Version:    \033[38;5;108mv%s\033[0m\n" "${LIVE_MKE_VER}"
+    printf "    • Kubernetes/k0s: \033[38;5;108m%s\033[0m\n" "${SAMPLE_K8S}"
+    printf "    • Container Engine:\033[38;5;108mcontainerd\033[0m\n"
+    printf "    • MSR4 Registry:  \033[38;5;108m%s\033[0m\n" "${LIVE_MSR_VER}"
 else
-    printf "  \033[1;33mStack Versions:\033[0m MKE3: \033[38;5;108mv%s\033[0m | MCR (Docker): \033[38;5;108m%s\033[0m | MSR2: \033[38;5;108m%s\033[0m\n" \
-        "${CONFIG_MKE_VER}" "${CONFIG_MCR_VER}" "${CONFIG_MSR_VER}"
+    printf "    • MKE Version:    \033[38;5;108mv%s\033[0m\n" "${CONFIG_MKE_VER}"
+    printf "    • MCR (Docker):   \033[38;5;108m%s\033[0m\n" "${CONFIG_MCR_VER}"
+    printf "    • MSR2 Registry:  \033[38;5;108m%s\033[0m\n" "${CONFIG_MSR_VER}"
 fi
 echo "----------------------------------------------------------------------------------------------------------------"
 echo ""

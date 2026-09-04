@@ -127,7 +127,19 @@ def generate_tfvars(config):
         aws_profile = config.get('AWS_PROFILE', '')
         aws_creds = config.get('AWS_CREDENTIALS_FILE', '')
         cluster_name = config.get('CLUSTER_NAME', 'ps-mke')
-        node_pools_hcl = build_node_pools(config.get('AWS_NODE_POOLS', ''))
+        pools_str = config.get('AWS_NODE_POOLS', '')
+
+        # If MSR2 is enabled for MKE3 and no msr pool is explicitly in pools_str, auto-append
+        msr2_on = config.get('MSR2_ENABLED', config.get('ENABLE_MSR', 'false')).lower() == 'true'
+        cluster_type = config.get('CLUSTER_TYPE', 'mke4').lower()
+        if msr2_on and cluster_type == 'mke3' and ':msr:' not in pools_str and ':registry:' not in pools_str:
+            msr2_ha = config.get('MSR2_HA', 'false').lower() == 'true'
+            msr_count = 3 if msr2_ha else 1
+            os_match = re.search(r':(rhel[0-9]+|ubuntu[0-9]+|rocky[0-9]+):', pools_str)
+            os_name = os_match.group(1) if os_match else 'rhel96'
+            pools_str = f"{pools_str.strip()} aws-msr:msr:{os_name}:m6id.large:{msr_count}".strip()
+
+        node_pools_hcl = build_node_pools(pools_str)
 
         lines.append('aws_settings = {')
         lines.append('  enabled                 = true')

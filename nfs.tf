@@ -42,31 +42,22 @@ resource "aws_security_group" "nfs" {
   description = "Security group for NFS server"
   vpc_id      = try(module.aws[0].vpc_id, null)
 
-  # NFS
+  # Intra-VPC traffic (NFS, RPC, mountd, portmapper, lockd on all ports)
   ingress {
-    from_port   = 2049
-    to_port     = 2049
-    protocol    = "tcp"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = [try(module.aws[0].vpc_cidr, "10.40.0.0/16")]
-    description = "NFS access from VPC"
+    description = "All intra-VPC traffic"
   }
 
-  # RPC
-  ingress {
-    from_port   = 111
-    to_port     = 111
-    protocol    = "tcp"
-    cidr_blocks = [try(module.aws[0].vpc_cidr, "10.40.0.0/16")]
-    description = "RPC portmapper"
-  }
-
-  # SSH (for management)
+  # SSH (for management from anywhere)
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [try(module.aws[0].vpc_cidr, "10.40.0.0/16")]
-    description = "SSH access from VPC"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH access"
   }
 
   egress {
@@ -126,14 +117,15 @@ data "aws_ami" "nfs" {
 resource "aws_instance" "nfs" {
   count = local.nfs_enabled && local.aws_enabled ? 1 : 0
 
-  ami                    = data.aws_ami.nfs[0].id
-  instance_type          = var.nfs_instance_type
-  subnet_id              = try(module.aws[0].private_subnet_ids[0], module.aws[0].public_subnet_ids[0], null)
-  vpc_security_group_ids = [aws_security_group.nfs[0].id]
-  key_name               = try(module.aws[0].ssh_key_name, null)
+  ami                         = data.aws_ami.nfs[0].id
+  instance_type               = var.nfs_instance_type
+  subnet_id                   = try(module.aws[0].public_subnet_ids[0], null)
+  associate_public_ip_address = true
+  vpc_security_group_ids      = [aws_security_group.nfs[0].id]
+  key_name                    = try(module.aws[0].ssh_key_name, null)
 
   root_block_device {
-    volume_size = 20
+    volume_size = 50
     volume_type = "gp3"
   }
 
@@ -141,17 +133,25 @@ resource "aws_instance" "nfs" {
     #!/bin/bash
     set -euo pipefail
 
-    # Install NFS server
+    # Install NFS server and tools
     dnf install -y nfs-utils
 
-    # Wait for EBS volume
-    while [ ! -b /dev/nvme1n1 ]; do sleep 1; done
+    # Wait for secondary EBS volume to attach
+    for i in $(seq 1 60); do
+      DATA_DEV=$(lsblk -dpno NAME,TYPE | grep -w disk | grep -v "/dev/nvme0n1" | grep -v "/dev/xvda" | head -1 | awk '{print $1}' || true)
+      [ -n "$DATA_DEV" ] && [ -b "$DATA_DEV" ] && break
+      sleep 2
+    done
 
-    # Format and mount EBS volume
-    mkfs -t ext4 /dev/nvme1n1
     mkdir -p ${var.nfs_export_path}
-    mount /dev/nvme1n1 ${var.nfs_export_path}
-    echo "/dev/nvme1n1 ${var.nfs_export_path} ext4 defaults,nofail 0 2" >> /etc/fstab
+
+    if [ -n "$DATA_DEV" ] && [ -b "$DATA_DEV" ]; then
+      if ! blkid "$DATA_DEV"; then
+        mkfs -t ext4 "$DATA_DEV"
+      fi
+      mount "$DATA_DEV" ${var.nfs_export_path}
+      echo "$DATA_DEV ${var.nfs_export_path} ext4 defaults,nofail 0 2" >> /etc/fstab
+    fi
 
     # Create subdirectories for MSR4
     mkdir -p ${var.nfs_export_path}/postgres-data \
@@ -160,21 +160,27 @@ resource "aws_instance" "nfs" {
              ${var.nfs_export_path}/registry-data \
              ${var.nfs_export_path}/redis-data
 
-    # Set permissions
-    chown -R 999:999     ${var.nfs_export_path}/postgres-data
-    chown -R 10000:10000 ${var.nfs_export_path}/trivy-data
-    chown -R 10000:10000 ${var.nfs_export_path}/jobservice-data
-    chown -R 10000:10000 ${var.nfs_export_path}/registry-data
-    chown -R 999:999     ${var.nfs_export_path}/redis-data
+    # Set permissive permissions for storage provisioner and services
+    chmod -R 777 ${var.nfs_export_path}
 
-    # Export via NFS
-    echo "${var.nfs_export_path} *(rw,sync,no_subtree_check,no_root_squash,fsid=0)" > /etc/exports
+    # Bind mount /msr4 to export path if different
+    if [ "${var.nfs_export_path}" != "/msr4" ]; then
+      mkdir -p /msr4
+      mount --bind ${var.nfs_export_path} /msr4
+      echo "${var.nfs_export_path} /msr4 none bind 0 0" >> /etc/fstab
+    fi
+
+    # Export via NFS to VPC subnet
+    cat <<EXPORTS > /etc/exports
+${var.nfs_export_path} *(rw,sync,no_subtree_check,no_root_squash,no_all_squash,insecure)
+/msr4 *(rw,sync,no_subtree_check,no_root_squash,no_all_squash,insecure)
+EXPORTS
     exportfs -ra
 
     # Enable and start NFS server
     systemctl enable --now nfs-server
 
-    # SELinux tweaks
+    # SELinux adjustments
     if command -v setsebool &>/dev/null && selinuxenabled 2>/dev/null; then
       setsebool -P nfs_export_all_rw 1 2>/dev/null || true
       setsebool -P use_nfs_home_dirs 1 2>/dev/null || true

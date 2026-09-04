@@ -74,13 +74,15 @@ fi
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 ARTIFACTS_DIR="${PROJECT_ROOT}/artifacts"
-MSR_DIR="${ARTIFACTS_DIR}/msr4"
+MSR_DIR="${ARTIFACTS_DIR}/configs/msr4"
 VALUES_DIR="${MSR_DIR}/values"
 MANIFESTS_DIR="${MSR_DIR}/manifests"
 SSH_DIR="${ARTIFACTS_DIR}/ssh"
 TLS_DIR="${ARTIFACTS_DIR}/tlscerts"
+COMMON_SCRIPTS_DIR="${ARTIFACTS_DIR}/scripts/common"
+NFS_SETUP_SCRIPT="${COMMON_SCRIPTS_DIR}/nfs_setup.sh"
 
 HA_MODE=false
 MSR4_VERSION="4.13.5"
@@ -435,49 +437,61 @@ log_ok "MSR4 nodes labeled"
 
 run_step "Step 3: Storage setup — NFS"
 
-# Auto-detect NFS node if not specified
-if [ -z "${NFS_NODE}" ] && [ -n "${MSR4_NFS_NODE:-}" ]; then
-  NFS_NODE="${MSR4_NFS_NODE}"
-  log_debug "NFS node set from MSR4_NFS_NODE env: ${NFS_NODE}"
-fi
-if [ -z "${NFS_NODE}" ]; then
-  log_debug "Auto-detecting NFS node from MSR4-labeled nodes..."
-  NFS_NODE=$(kubectl get nodes -l msr4=true -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+# Check if dedicated NFS server exists in terraform outputs
+TF_NFS_PRIV=$(terraform -chdir="${PROJECT_ROOT}" output -raw nfs_private_ip 2>/dev/null || true)
+TF_NFS_PUB=$(terraform -chdir="${PROJECT_ROOT}" output -raw nfs_public_ip 2>/dev/null || true)
+
+if [ -n "${TF_NFS_PRIV}" ] && [ "${TF_NFS_PRIV}" != "null" ]; then
+  NFS_NODE="dedicated-nfs"
+  NFS_NODE_INTERNAL_IP="${TF_NFS_PRIV}"
+  NFS_SSH_ADDR="${TF_NFS_PUB:-$TF_NFS_PRIV}"
+  NFS_PATH="${NFS_PATH:-/srv/nfs}"
+  log_info "Detected dedicated NFS server: ${NFS_SSH_ADDR} (internal: ${NFS_NODE_INTERNAL_IP}, export: ${NFS_PATH})"
+else
+  # Auto-detect NFS node if not specified
+  if [ -z "${NFS_NODE}" ] && [ -n "${MSR4_NFS_NODE:-}" ]; then
+    NFS_NODE="${MSR4_NFS_NODE}"
+    log_debug "NFS node set from MSR4_NFS_NODE env: ${NFS_NODE}"
+  fi
   if [ -z "${NFS_NODE}" ]; then
-    NFS_NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    log_debug "Auto-detecting NFS node from MSR4-labeled nodes..."
+    NFS_NODE=$(kubectl get nodes -l msr4=true -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    if [ -z "${NFS_NODE}" ]; then
+      NFS_NODE=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    fi
+    log_debug "Auto-detected NFS node name: ${NFS_NODE}"
   fi
-  log_debug "Auto-detected NFS node name: ${NFS_NODE}"
-fi
 
-if [ -z "${NFS_NODE}" ]; then
-  log_error "Could not auto-detect NFS node. Specify with --nfs-node or MSR4_NFS_NODE env"
-  exit 1
-fi
+  if [ -z "${NFS_NODE}" ]; then
+    log_error "Could not auto-detect NFS node. Specify with --nfs-node or MSR4_NFS_NODE env"
+    exit 1
+  fi
 
-# Resolve node IPs from launchpad describe hosts, hosts.yaml (MKE4), or terraform output
-NFS_SSH_ADDR=""
-NFS_NODE_INTERNAL_IP=""
-# Try launchpad first (MKE3)
-while IFS=$'\t' read -r addr internal_ip hostname role rest; do
-  if [ "${hostname}" = "${NFS_NODE}" ]; then
-    NFS_SSH_ADDR="${addr}"
-    NFS_NODE_INTERNAL_IP="${internal_ip}"
-    break
+  # Resolve node IPs from launchpad describe hosts, hosts.yaml (MKE4), or terraform output
+  NFS_SSH_ADDR=""
+  NFS_NODE_INTERNAL_IP=""
+  # Try launchpad first (MKE3)
+  while IFS=$'\t' read -r addr internal_ip hostname role rest; do
+    if [ "${hostname}" = "${NFS_NODE}" ]; then
+      NFS_SSH_ADDR="${addr}"
+      NFS_NODE_INTERNAL_IP="${internal_ip}"
+      break
+    fi
+  done < <(launchpad describe -c "${PROJECT_ROOT}/artifacts/configs/launchpad.yaml" hosts 2>/dev/null | tail -n +2)
+  # Try terraform output (MKE4) — map K8s internal IP to public IP
+  if [ -z "${NFS_SSH_ADDR}" ] && command -v terraform &>/dev/null; then
+    NFS_NODE_INTERNAL_IP=$(kubectl get node "${NFS_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
+    if [ -n "${NFS_NODE_INTERNAL_IP}" ]; then
+      NFS_SSH_ADDR=$(terraform -chdir="${PROJECT_ROOT}" output -json all_hosts 2>/dev/null | \
+        jq -r --arg ip "${NFS_NODE_INTERNAL_IP}" '.[] | select(.private_ip == $ip) | .public_ip' 2>/dev/null || true)
+    fi
   fi
-done < <(launchpad describe -c "${PROJECT_ROOT}/artifacts/configs/launchpad.yaml" hosts 2>/dev/null | tail -n +2)
-# Try terraform output (MKE4) — map K8s internal IP to public IP
-if [ -z "${NFS_SSH_ADDR}" ] && command -v terraform &>/dev/null; then
-  NFS_NODE_INTERNAL_IP=$(kubectl get node "${NFS_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
-  if [ -n "${NFS_NODE_INTERNAL_IP}" ]; then
-    NFS_SSH_ADDR=$(terraform -chdir="${PROJECT_ROOT}" output -json all_hosts 2>/dev/null | \
-      jq -r --arg ip "${NFS_NODE_INTERNAL_IP}" '.[] | select(.private_ip == $ip) | .public_ip' 2>/dev/null || true)
+  # Final fallback: K8s InternalIP
+  if [ -z "${NFS_SSH_ADDR}" ]; then
+    log_warn "Could not resolve public IP for NFS node ${NFS_NODE}; falling back to K8s InternalIP"
+    NFS_NODE_INTERNAL_IP=$(kubectl get node "${NFS_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "${NFS_NODE}")
+    NFS_SSH_ADDR="${NFS_NODE_INTERNAL_IP}"
   fi
-fi
-# Final fallback: K8s InternalIP
-if [ -z "${NFS_SSH_ADDR}" ]; then
-  log_warn "Could not resolve public IP for NFS node ${NFS_NODE}; falling back to K8s InternalIP"
-  NFS_NODE_INTERNAL_IP=$(kubectl get node "${NFS_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "${NFS_NODE}")
-  NFS_SSH_ADDR="${NFS_NODE_INTERNAL_IP}"
 fi
 log_info "Using NFS server node: ${NFS_NODE} (SSH: ${NFS_SSH_ADDR}, internal: ${NFS_NODE_INTERNAL_IP})"
 
@@ -497,11 +511,11 @@ else
   fi
 
   log_info "Setting up NFS server on ${NFS_SSH_ADDR}..."
-  ${SSH_CMD} "${SSH_USER}@${NFS_SSH_ADDR}" 'bash -s' < "${SCRIPT_DIR}/nfs_setup.sh" -- "${NFS_PATH}" server || {
+  ${SSH_CMD} "${SSH_USER}@${NFS_SSH_ADDR}" 'bash -s' < "${NFS_SETUP_SCRIPT}" -- "${NFS_PATH}" server || {
     log_warn "Could not setup NFS via SSH. Will attempt using existing NFS script..."
-    if [ -f "${ARTIFACTS_DIR}/scripts/nfs-server-install-ubuntu.sh" ]; then
+    if [ -f "${COMMON_SCRIPTS_DIR}/nfs-server-install-ubuntu.sh" ]; then
       log_info "Running nfs-server-install-ubuntu.sh on ${NFS_SSH_ADDR}..."
-      ${SSH_CMD} "${SSH_USER}@${NFS_SSH_ADDR}" 'bash -s' < "${ARTIFACTS_DIR}/scripts/nfs-server-install-ubuntu.sh" || log_warn "NFS script had issues, check manually"
+      ${SSH_CMD} "${SSH_USER}@${NFS_SSH_ADDR}" 'bash -s' < "${COMMON_SCRIPTS_DIR}/nfs-server-install-ubuntu.sh" || log_warn "NFS script had issues, check manually"
     fi
   }
 
@@ -540,7 +554,7 @@ else
       CLIENT_SSH_CMD="${CLIENT_SSH_CMD} -i ${SSH_KEY}"
     fi
     log_info "  Installing on ${CLIENT_NODE_NAME} (${CLIENT_NODE_SSH_ADDR})..."
-    ${CLIENT_SSH_CMD} "${SSH_USER}@${CLIENT_NODE_SSH_ADDR}" 'bash -s' < "${SCRIPT_DIR}/nfs_setup.sh" -- "${NFS_PATH}" client 2>&1 || {
+    ${CLIENT_SSH_CMD} "${SSH_USER}@${CLIENT_NODE_SSH_ADDR}" 'bash -s' < "${NFS_SETUP_SCRIPT}" -- "${NFS_PATH}" client 2>&1 || {
       log_error "FAILED to install NFS/CIFS client packages on ${CLIENT_NODE_NAME} (${CLIENT_NODE_SSH_ADDR})"
       NFS_CLIENT_FAIL=1
     }

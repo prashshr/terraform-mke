@@ -54,6 +54,7 @@ load_config() {
     # ── MSR2 ────────────────────────────────────────────────────────────────
     MSR2_ENABLED="${MSR2_ENABLED:-${ENABLE_MSR:-false}}"
     ENABLE_MSR="${MSR2_ENABLED}"
+    MSR2_HA="${MSR2_HA:-false}"
     MSR2_VERSION="${MSR2_VERSION:-${MSR_VERSION:-2.9.11}}"
     MSR_VERSION="${MSR2_VERSION}"
     MSR2_APP_DOMAIN="${MSR2_APP_DOMAIN:-${APP_DOMAIN_MSR2:-${APP_DOMAIN_MSR:-msrtest}}}"

@@ -85,6 +85,11 @@ _create_inner:
 	echo "→ install MKE (timeout $(MKECTL_TIMEOUT_MINS)m, SSH_KNOWN_HOSTS=/dev/null)..."; \
 	if [ "$(CLUSTER_TYPE)" = "mke3" ]; then \
 	  SSH_KNOWN_HOSTS=/dev/null launchpad apply -c artifacts/configs/launchpad.yaml --debug; \
+	  SSH_KNOWN_HOSTS=/dev/null launchpad client-config -c artifacts/configs/launchpad.yaml --disable-upgrade-check || true; \
+	  CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/launchpad.yaml | awk '{print $$2}' || echo "ps-mke"); \
+	  if [ -f "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" ]; then \
+	    cp "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" artifacts/configs/kubeconfig.yaml; \
+	  fi; \
 	else \
 	  MKE4_VER="$(MKE4_VERSION)"; MKE4_MINOR=$$(echo "$$MKE4_VER" | cut -d. -f1-2); BIN="artifacts/bin/mkectl-v$$MKE4_VER"; \
 	  [ -f "$$BIN" ] || artifacts/bin/download_mkectl.sh "$$MKE4_VER"; \
@@ -94,12 +99,10 @@ _create_inner:
 	if [ "$(STACK)" = "1" ]; then \
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
 	    source config.env; \
-	    if [ "$$MSR4_ENABLED" = "true" ] || [ "$(MSR4_HA)" = "true" ]; then \
-	      echo "→ installing MSR4 (stack mode)..."; \
-	      ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$$MSR4_HA" = "true" ] && echo --ha ) --msr-version "$$MSR4_VERSION" --domain "$$MSR4_DOMAIN" --yes; \
-	    else echo "→ STACK=1 but MSR4_ENABLED=false — skipping MSR4 (set MSR4_ENABLED=true in config.env)"; fi; \
+	    echo "→ installing MSR4 (stack mode)..."; \
+	    ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$${MSR4_HA:-false}" = "true" ] && echo --ha ) --msr-version "$${MSR4_VERSION:-4.13.5}" --domain "$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}" --yes; \
 	  else \
-	    echo "→ installing classic MSR (mke3 stack) — enable_msr should be true in config.env"; \
+	    echo "→ MKE3 stack deployed with MSR2 via Launchpad."; \
 	  fi; \
 	fi
 

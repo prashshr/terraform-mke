@@ -118,7 +118,7 @@ setup_server() {
 
   # Write exports file
   sudo tee /etc/exports > /dev/null <<EOF
-${NFS_PATH} *(rw,sync,no_subtree_check,no_root_squash,fsid=0)
+${NFS_PATH} *(rw,sync,no_subtree_check,no_root_squash,insecure)
 EOF
   sudo exportfs -ra
 

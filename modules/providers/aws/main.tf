@@ -110,6 +110,11 @@ locals {
     for key, spec in local.instances : key
     if contains(spec.roles, "msr") || contains(spec.roles, "registry")
   ]
+
+  msr4_instance_keys = length(local.msr_instance_keys) > 0 ? local.msr_instance_keys : [
+    for key, spec in local.instances : key
+    if contains(spec.roles, "worker")
+  ]
 }
 
 resource "null_resource" "ssh_dir" {
@@ -210,6 +215,14 @@ resource "aws_security_group" "cluster" {
     to_port     = 0
     protocol    = "-1"
     self        = true
+  }
+
+  ingress {
+    description = "Allow all intra-VPC traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [aws_vpc.cluster.cidr_block]
   }
 
   ingress {
@@ -824,7 +837,7 @@ resource "aws_lb_listener" "msr_443" {
 
 # MSR4 NLB: port 443 → nodePort 34003 on msr-role instances
 resource "aws_lb" "msr4" {
-  count = length(local.msr_instance_keys) > 0 ? 1 : 0
+  count = length(local.msr4_instance_keys) > 0 ? 1 : 0
 
   name               = "${substr(var.resource_prefix, 0, 18)}-msr4"
   internal           = false
@@ -839,7 +852,7 @@ resource "aws_lb" "msr4" {
 }
 
 resource "aws_lb_target_group" "msr4_443" {
-  count = length(local.msr_instance_keys) > 0 ? 1 : 0
+  count = length(local.msr4_instance_keys) > 0 ? 1 : 0
 
   name        = "${substr(var.resource_prefix, 0, 16)}-msr434003"
   port        = 34003
@@ -854,8 +867,8 @@ resource "aws_lb_target_group" "msr4_443" {
 }
 
 resource "aws_lb_target_group_attachment" "msr4_443" {
-  for_each = length(local.msr_instance_keys) > 0 ? {
-    for key in local.msr_instance_keys : key => aws_instance.node[key].id
+  for_each = length(local.msr4_instance_keys) > 0 ? {
+    for key in local.msr4_instance_keys : key => aws_instance.node[key].id
   } : {}
 
   target_group_arn = aws_lb_target_group.msr4_443[0].arn
@@ -864,7 +877,7 @@ resource "aws_lb_target_group_attachment" "msr4_443" {
 }
 
 resource "aws_lb_listener" "msr4_443" {
-  count = length(local.msr_instance_keys) > 0 ? 1 : 0
+  count = length(local.msr4_instance_keys) > 0 ? 1 : 0
 
   load_balancer_arn = aws_lb.msr4[0].arn
   port              = 443
