@@ -80,6 +80,7 @@ _create_inner:
 	terraform init -input=false; \
 	terraform apply -auto-approve -var "cluster_type=$(CLUSTER_TYPE)" \
 	  $(if $(filter mke3,$(CLUSTER_TYPE)),-var "mke3_version=$(MKE3_VERSION)") \
+	  $(if $(and $(filter mke3,$(CLUSTER_TYPE)),$(filter 1,$(STACK))),-var "enable_msr=true") \
 	  $(if $(filter mke4,$(CLUSTER_TYPE)),-var "mke4_version=$(MKE4_VERSION)"); \
 	echo "→ install MKE (timeout $(MKECTL_TIMEOUT_MINS)m, SSH_KNOWN_HOSTS=/dev/null)..."; \
 	if [ "$(CLUSTER_TYPE)" = "mke3" ]; then \

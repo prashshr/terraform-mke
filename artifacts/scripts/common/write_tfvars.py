@@ -18,7 +18,6 @@ def _strip_inline_comment(val):
         elif ch == '"' and not in_single:
             in_double = not in_double
         elif ch == '#' and not in_single and not in_double:
-            # require space or start before # to be a comment
             if i == 0 or val[i-1].isspace():
                 return val[:i].rstrip()
     return val
@@ -37,7 +36,6 @@ def parse_config(config_path):
                 key = m.group(1)
                 val = m.group(2).strip()
                 val = _strip_inline_comment(val)
-                # Strip surrounding quotes (bash sets them, we don't need them)
                 if len(val) >= 2 and val.startswith('"') and val.endswith('"'):
                     val = val[1:-1]
                 elif len(val) >= 2 and val.startswith("'") and val.endswith("'"):
@@ -48,16 +46,12 @@ def parse_config(config_path):
 
 def to_tfval(val):
     """Convert a config value to HCL format."""
-    # Boolean
     if val.lower() in ('true', 'false'):
         return val.lower()
-    # Integer
     if re.match(r'^-?\d+$', val):
         return val
-    # Null
     if val.lower() == 'null' or val == '':
         return 'null'
-    # String — wrap in quotes
     return f'"{val}"'
 
 
@@ -94,6 +88,20 @@ def generate_tfvars(config):
     """Generate terraform.tfvars content from parsed config."""
     lines = []
 
+    # Map product-prefixed keys to terraform variable names
+    aliases = {
+        'MKE3_MCR_VERSION': 'MCR_VERSION',
+        'MKE3_APP_DOMAIN': 'APP_DOMAIN_MKE3',
+        'MKE4_APP_DOMAIN': 'APP_DOMAIN_MKE4',
+        'MSR2_VERSION': 'MSR_VERSION',
+        'MSR2_ENABLED': 'ENABLE_MSR',
+        'MSR2_APP_DOMAIN': 'APP_DOMAIN_MSR',
+        'MSR4_APP_DOMAIN': 'APP_DOMAIN_MSR4',
+    }
+    for src, dst in aliases.items():
+        if src in config and dst not in config:
+            config[dst] = config[src]
+
     # Simple variables
     simple_vars = [
         'cluster_name', 'cluster_type', 'admin_username', 'admin_password',
@@ -118,7 +126,6 @@ def generate_tfvars(config):
         aws_region = config.get('AWS_REGION', 'eu-west-1')
         aws_profile = config.get('AWS_PROFILE', '')
         aws_creds = config.get('AWS_CREDENTIALS_FILE', '')
-        aws_root_vol = config.get('AWS_ROOT_VOLUME_SIZE', '120')
         cluster_name = config.get('CLUSTER_NAME', 'ps-mke')
         node_pools_hcl = build_node_pools(config.get('AWS_NODE_POOLS', ''))
 
@@ -167,9 +174,13 @@ def generate_tfvars(config):
         ('MKE3_TLS_ENABLED', 'mke3_tls'),
         ('MKE4_TLS_ENABLED', 'mke4_tls'),
         ('INGRESS_TLS_ENABLED', 'ingress_tls'),
-        ('MSR_TLS_ENABLED', 'msr_tls'),
+        ('MSR2_TLS_ENABLED', 'msr_tls'),
         ('MSR4_TLS_ENABLED', 'msr4_tls'),
     ]
+    # Fallback check for legacy MSR_TLS_ENABLED
+    if 'MSR2_TLS_ENABLED' not in config and 'MSR_TLS_ENABLED' in config:
+        config['MSR2_TLS_ENABLED'] = config['MSR_TLS_ENABLED']
+
     for enabled_key, var_name in tls_subsystems:
         enabled = config.get(enabled_key, 'false').lower() == 'true'
         lines.append(f'{var_name} = {{')
