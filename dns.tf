@@ -93,6 +93,40 @@ resource "cloudflare_record" "aws_msr4" {
   }
 }
 
+resource "cloudflare_record" "aws_kof" {
+  count = (local.cloudflare_enabled && local.aws_enabled && var.kof_enabled && local.cloudflare_record_name_kof != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_record_name_kof
+  type            = "CNAME"
+  content         = local.aws_mke4_ui_lb_dns
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "cloudflare_record" "aws_k0rdent_ui" {
+  count = (local.cloudflare_enabled && local.aws_enabled && var.k0rdent_ui_enabled && local.cloudflare_record_name_k0rdent_ui != null &&
+  try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
+
+  zone_id         = local.cloudflare_zone_id
+  name            = local.cloudflare_record_name_k0rdent_ui
+  type            = "CNAME"
+  content         = local.aws_mke4_ui_lb_dns
+  ttl             = 300
+  proxied         = false
+  allow_overwrite = true
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
 resource "cloudflare_record" "hetzner_default" {
   count = (local.cloudflare_enabled && local.hetzner_enabled && local.cloudflare_settings_map.record_name != null &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0

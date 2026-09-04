@@ -57,6 +57,18 @@ variable "app_domain_msr4" {
   default     = "msr4"
 }
 
+variable "app_domain_kof" {
+  description = "Hostname prefix for KOF / Grafana monitoring services."
+  type        = string
+  default     = "kof-mke"
+}
+
+variable "app_domain_k0rdent_ui" {
+  description = "Hostname prefix for k0rdent-ui services."
+  type        = string
+  default     = "k0rdent-ui"
+}
+
 variable "admin_username" {
   description = "Username for both Launchpad and mkectl administrative users."
   type        = string

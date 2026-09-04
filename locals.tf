@@ -111,19 +111,23 @@ locals {
     "samkhya.cloud"
   )
 
-  app_domain_mke3    = coalesce(try(var.app_domain_mke3, null), "mke3")
-  app_domain_mke4    = coalesce(try(var.app_domain_mke4, null), "mke4")
-  app_domain_mke4_ui = coalesce(try(var.app_domain_mke4_ui, null), "mke4-ui")
-  app_domain_ingress = coalesce(try(var.app_domain_ingress, null), "ingress")
-  app_domain_msr     = coalesce(try(var.app_domain_msr, null), "msr")
-  app_domain_msr4    = coalesce(try(var.app_domain_msr4, null), "msr4")
+  app_domain_mke3       = coalesce(try(var.app_domain_mke3, null), "mke3")
+  app_domain_mke4       = coalesce(try(var.app_domain_mke4, null), "mke4")
+  app_domain_mke4_ui    = coalesce(try(var.app_domain_mke4_ui, null), "mke4-ui")
+  app_domain_ingress    = coalesce(try(var.app_domain_ingress, null), "ingress")
+  app_domain_msr        = coalesce(try(var.app_domain_msr, null), "msr")
+  app_domain_msr4       = coalesce(try(var.app_domain_msr4, null), "msr4")
+  app_domain_kof        = coalesce(try(var.app_domain_kof, null), "kof-mke")
+  app_domain_k0rdent_ui = coalesce(try(var.app_domain_k0rdent_ui, null), "k0rdent-ui")
 
-  mke3_domain    = "${local.app_domain_mke3}.${local.root_domain}"
-  mke4_domain    = "${local.app_domain_mke4}.${local.root_domain}"
-  mke4_ui_domain = "${local.app_domain_mke4_ui}.${local.root_domain}"
-  ingress_domain = "${local.app_domain_ingress}.${local.root_domain}"
-  msr_domain     = "${local.app_domain_msr}.${local.root_domain}"
-  msr4_domain    = "${local.app_domain_msr4}.${local.root_domain}"
+  mke3_domain       = "${local.app_domain_mke3}.${local.root_domain}"
+  mke4_domain       = "${local.app_domain_mke4}.${local.root_domain}"
+  mke4_ui_domain    = "${local.app_domain_mke4_ui}.${local.root_domain}"
+  ingress_domain    = "${local.app_domain_ingress}.${local.root_domain}"
+  msr_domain        = "${local.app_domain_msr}.${local.root_domain}"
+  msr4_domain       = "${local.app_domain_msr4}.${local.root_domain}"
+  kof_domain        = "${local.app_domain_kof}.${local.root_domain}"
+  k0rdent_ui_domain = "${local.app_domain_k0rdent_ui}.${local.root_domain}"
 
   cloudflare_record_name_manager = coalesce(
     try(local.cloudflare_settings_map.record_name_manager, null),
@@ -144,6 +148,14 @@ locals {
   cloudflare_record_name_msr4 = coalesce(
     try(local.cloudflare_settings_map.record_name_msr4, null),
     local.msr4_domain
+  )
+  cloudflare_record_name_kof = coalesce(
+    try(local.cloudflare_settings_map.record_name_kof, null),
+    local.kof_domain
+  )
+  cloudflare_record_name_k0rdent_ui = coalesce(
+    try(local.cloudflare_settings_map.record_name_k0rdent_ui, null),
+    local.k0rdent_ui_domain
   )
 
   aws_enabled     = try(local.aws_settings_map.enabled, false) && length(try(local.aws_settings_map.node_pools, [])) > 0

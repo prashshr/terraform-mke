@@ -97,6 +97,8 @@ def generate_tfvars(config):
         'MSR2_ENABLED': 'ENABLE_MSR',
         'MSR2_APP_DOMAIN': 'APP_DOMAIN_MSR',
         'MSR4_APP_DOMAIN': 'APP_DOMAIN_MSR4',
+        'KOF_APP_DOMAIN': 'APP_DOMAIN_KOF',
+        'K0RDENT_UI_APP_DOMAIN': 'APP_DOMAIN_K0RDENT_UI',
     }
     for src, dst in aliases.items():
         if src in config and dst not in config:
@@ -109,7 +111,7 @@ def generate_tfvars(config):
         'mke4_ui_backend_port', 'mke4_gateway_http_node_port', 'mke4_gateway_https_node_port',
         'aws_root_volume_size', 'root_domain',
         'app_domain_mke3', 'app_domain_mke4', 'app_domain_ingress',
-        'app_domain_msr', 'app_domain_msr4',
+        'app_domain_msr', 'app_domain_msr4', 'app_domain_kof', 'app_domain_k0rdent_ui',
         'enable_msr', 'airgap_enabled', 'nfs_enabled', 'kof_enabled', 'k0rdent_ui_enabled',
     ]
 

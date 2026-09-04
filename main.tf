@@ -169,6 +169,8 @@ locals {
     local.hetzner_mke4_ui_lb_ip != null ? [local.hetzner_mke4_ui_lb_ip] : [],
     [local.mke4_domain],
     [local.mke4_ui_domain],
+    [local.kof_domain],
+    [local.k0rdent_ui_domain],
     [for host in local.all_hosts : try(host.public_dns, null)],
     [for host in local.all_hosts : host.name],
     [for host in local.all_hosts : host.public_ip],

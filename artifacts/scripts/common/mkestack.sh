@@ -88,7 +88,7 @@ else
     MINOR=$(echo "$MKE_VERSION" | cut -d. -f1-2)
     BIN="$REPO/artifacts/bin/mkectl-v$MKE_VERSION"
     [ -f "$BIN" ] || "$REPO/artifacts/bin/download_mkectl.sh" "$MKE_VERSION"
-    SSH_KNOWN_HOSTS=/dev/null "$BIN" apply -f "$REPO/artifacts/configs/mke4-v$MINOR.yaml" --admin-password "$ADMIN_PASSWORD" -l debug --timeout-minutes "$MKECTL_TIMEOUT_MINS"
+    SSH_KNOWN_HOSTS=/dev/null "$BIN" apply -f "$REPO/artifacts/configs/mke4-v$MINOR.yaml" --admin-password "$ADMIN_PASSWORD" -l debug --timeout-minutes "$MKECTL_TIMEOUT_MINS" --lease-adopt-stale
     echo "MKE4 $MKE_VERSION installed."
 fi
 

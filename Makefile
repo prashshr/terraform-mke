@@ -73,7 +73,11 @@ create: ## Create stack: make create mke3|mke4|mke3stack|mke4stack
 	@:
 
 _create_inner:
-	@source artifacts/scripts/common/config_parser.sh && load_config; \
+	@mkdir -p logs; \
+	LOG_FILE="logs/create-$(CLUSTER_TYPE)-$$(date +%Y%m%d-%H%M%S).log"; \
+	echo "Logging output to $$LOG_FILE"; \
+	exec > >(tee -a "$$LOG_FILE") 2>&1; \
+	source artifacts/scripts/common/config_parser.sh && load_config; \
 	echo "→ config-apply..."; \
 	python3 artifacts/scripts/common/write_tfvars.py config.env terraform.tfvars; \
 	echo "→ terraform init/apply (CLUSTER_TYPE=$(CLUSTER_TYPE))..."; \
@@ -93,8 +97,9 @@ _create_inner:
 	else \
 	  MKE4_VER="$(MKE4_VERSION)"; MKE4_MINOR=$$(echo "$$MKE4_VER" | cut -d. -f1-2); BIN="artifacts/bin/mkectl-v$$MKE4_VER"; \
 	  [ -f "$$BIN" ] || artifacts/bin/download_mkectl.sh "$$MKE4_VER"; \
-	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)"; \
+	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)" --lease-adopt-stale; \
 	  if [ -f ~/.mke/mke.kubeconf ]; then cp ~/.mke/mke.kubeconf artifacts/configs/kubeconfig.yaml; fi; \
+	  ./artifacts/scripts/mke4/setup_mke4_ingresses.sh || true; \
 	fi; \
 	if [ "$(STACK)" = "1" ]; then \
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
@@ -109,6 +114,10 @@ _create_inner:
 destroy: ## Destroy stack: make destroy [mke4stack|mke3stack|mke4|mke3] (auto-approved by default)
 	@arg="$(filter mke3stack mke4stack mke3 mke4,$(MAKECMDGOALS))"; \
 	[ -z "$$arg" ] && arg="cluster"; \
+	mkdir -p logs; \
+	LOG_FILE="logs/destroy-$$(date +%Y%m%d-%H%M%S).log"; \
+	echo "Logging output to $$LOG_FILE"; \
+	exec > >(tee -a "$$LOG_FILE") 2>&1; \
 	source artifacts/scripts/common/config_parser.sh && load_config; \
 	if [ "$$FORCE_DESTROY" = "true" ] || [ "$(FORCE_DESTROY)" = "true" ] || [ "$(YES)" = "1" ]; then \
 		echo "→ destroying $$arg (auto-approved, FORCE_DESTROY=true)..."; \

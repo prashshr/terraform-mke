@@ -63,6 +63,8 @@ else
     CONFIG_MKE_VER="${MKE4_VERSION:-4.2.0}"
     CONFIG_MCR_VER="n/a (containerd)"
     CONFIG_MSR_VER="${MSR4_VERSION:-4.13.5}"
+    KOF_URL="https://${KOF_APP_DOMAIN:-kof-mke}.${ROOT_DOM}"
+    K0RDENT_URL="https://${K0RDENT_UI_APP_DOMAIN:-k0rdent-ui}.${ROOT_DOM}"
 fi
 
 # Live health checks
@@ -78,6 +80,24 @@ if curl -sk --max-time 4 "${API_URL}/version" 2>/dev/null | grep -qiE "major|ver
     API_STATUS="${DOT_GREEN} Live"
 elif curl -skI --max-time 3 "${API_URL}" 2>/dev/null | grep -qE "HTTP/"; then
     API_STATUS="${DOT_GREEN} Live (TLS Handshake OK)"
+fi
+
+KOF_STATUS="${DOT_RED} Unreachable"
+if [[ "${KOF_ENABLED:-true}" == "true" && "$CLUSTER_TYPE_VAL" == "mke4" ]]; then
+    if curl -skI --max-time 3 "${KOF_URL}" 2>/dev/null | grep -qE "HTTP/[123.]+ [23]"; then
+        KOF_STATUS="${DOT_GREEN} Live"
+    elif curl -sk --max-time 3 "${KOF_URL}" 2>/dev/null | grep -qiE "Grafana|login"; then
+        KOF_STATUS="${DOT_GREEN} Live (Grafana)"
+    fi
+fi
+
+K0RDENT_STATUS="${DOT_RED} Unreachable"
+if [[ "${K0RDENT_UI_ENABLED:-true}" == "true" && "$CLUSTER_TYPE_VAL" == "mke4" ]]; then
+    if curl -skI --max-time 3 "${K0RDENT_URL}" 2>/dev/null | grep -qE "HTTP/[123.]+ [23]"; then
+        K0RDENT_STATUS="${DOT_GREEN} Live"
+    elif curl -sk --max-time 3 "${K0RDENT_URL}" 2>/dev/null | grep -qiE "k0rdent|kcm|Dashboard"; then
+        K0RDENT_STATUS="${DOT_GREEN} Live (k0rdent UI)"
+    fi
 fi
 
 # K8s Node Status Map via kubectl (if accessible)
@@ -150,6 +170,12 @@ echo "==========================================================================
 echo -e "  \033[1mEndpoints & Services:\033[0m"
 printf "    • MKE UI:         %-35s (Dashboard: %b)\n" "${UI_URL}" "${UI_STATUS}"
 printf "    • Kubernetes API: %-35s (API Server: %b)\n" "${API_URL}" "${API_STATUS}"
+if [[ "$CLUSTER_TYPE_VAL" == "mke4" && "${KOF_ENABLED:-true}" == "true" ]]; then
+    printf "    • KOF (Grafana):  %-35s (Monitoring: %b)\n" "${KOF_URL}" "${KOF_STATUS}"
+fi
+if [[ "$CLUSTER_TYPE_VAL" == "mke4" && "${K0RDENT_UI_ENABLED:-true}" == "true" ]]; then
+    printf "    • k0rdent UI:     %-35s (Management: %b)\n" "${K0RDENT_URL}" "${K0RDENT_STATUS}"
+fi
 if [[ "$LIVE_MSR_VER" != "none" || "${MSR2_ENABLED:-false}" == "true" || "${MSR4_ENABLED:-false}" == "true" ]]; then
     printf "    • MSR Registry:   %-35s (Registry: %s)\n" "${MSR_URL}" "${LIVE_MSR_VER}"
 fi
