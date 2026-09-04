@@ -34,5 +34,9 @@ terraform {
       source  = "vancluever/acme"
       version = "~> 2.14"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9"
+    }
   }
 }

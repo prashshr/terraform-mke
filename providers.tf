@@ -41,3 +41,4 @@ provider "acme" {
 provider "local" {}
 provider "null" {}
 provider "external" {}
+provider "time" {}
