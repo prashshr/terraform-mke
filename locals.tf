@@ -226,4 +226,8 @@ locals {
   cluster_type = var.cluster_type
   render_mke3  = local.should_render && local.cluster_type == "mke3"
   render_mke4  = local.should_render && local.cluster_type == "mke4"
+
+  # MKE4 license token from file
+  mke4_license_file = "${local.artifacts_dir}/mke-license/nfr.lic"
+  mke4_license_token = fileexists(local.mke4_license_file) ? trimspace(file(local.mke4_license_file)) : ""
 }

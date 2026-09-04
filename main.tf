@@ -741,6 +741,7 @@ locals {
     mke4_tls_ca_pem      = local.mke4_tls_ca_pem
     mke4_tls_cert_pem    = local.mke4_tls_cert_pem
     mke4_tls_key_pem     = local.mke4_tls_key_pem
+    mke4_license_token   = local.mke4_license_token
   }
 
   mkectl_upgrade_context = {

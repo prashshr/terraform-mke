@@ -1,7 +1,40 @@
 SHELL := /bin/bash
 
 .PHONY: init plan apply destroy mke3 mke4 mke4.1 mke4.2 mke4-upgrade-prereq mkectl-upgrade nuke-mke \
-        msr4 msr4-clean generate-msr-values mkestack
+        msr4 msr4-clean generate-msr-values mkestack help
+
+# -- Default target -------------------------------------------------------------
+.DEFAULT_GOAL := help
+
+help: ## Show this help
+	@echo ""
+	@echo "Usage: make <target> [VARIABLE=value ...]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z0-9_.-]+:.*## .+' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Common variables:"
+	@echo "  YES=1              Skip all confirmation prompts"
+	@echo "  LOG=1              Enable logging to logs/"
+	@echo "  CLUSTER_TYPE=mke4  mke3 or mke4 (default: mke4)"
+	@echo "  MKE_VERSION=4.2.0  MKE version to install"
+	@echo "  MSR_VERSION=4.13.6 MSR version to install (empty = skip)"
+	@echo "  MCR_VERSION=25.0.13 MCR version"
+	@echo "  ADMIN_PASSWORD=x   MKE4 admin password (default: mkepassword)"
+	@echo ""
+	@echo "Upgrade variables (make upgrade):"
+	@echo "  OLD_MKE_VERSION    Current MKE version (e.g. 4.1.5)"
+	@echo "  NEW_MKE_VERSION    Target MKE version (e.g. 4.2.0)"
+	@echo "  OLD_MSR_VERSION    Current MSR version (e.g. 4.13.5)"
+	@echo "  NEW_MSR_VERSION    Target MSR version (e.g. 4.13.6)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make mkestack                              # interactive full build"
+	@echo "  YES=1 make mkestack                        # skip prompts"
+	@echo "  MKE_VERSION=4.2.0 MSR_VERSION=4.13.6 YES=1 make mkestack"
+	@echo "  make msr4 MSR4_VERSION=4.13.6 MSR4_YES=true"
+	@echo ""
 
 # -- Cluster version selection --------------------------------------------------
 # CLUSTER_TYPE: "mke3" or "mke4" (default: from terraform.tfvars or "mke4")
@@ -44,7 +77,7 @@ MSR4_HA        ?= false
 MSR4_VERSION   ?= 4.13.5
 MSR4_DOMAIN    ?= msr4.$(shell terraform output -raw root_domain 2>/dev/null || echo "")
 
-msr4:
+msr4: ## Install MSR4 on cluster
 	@test -f artifacts/ssh/ps-mke-aws.pem || { echo "Missing SSH key; run make apply first"; exit 1; }
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	./artifacts/scripts/install_msr4.sh \
@@ -61,7 +94,7 @@ msr4:
 	  $(if $(CUSTOM_VALUES),--values "$(CUSTOM_VALUES)") \
 	  $(if $(filter true,$(MSR4_YES)),--yes)
 
-msr4-cleanup:
+msr4-cleanup: ## Remove MSR4 from cluster
 	$(if $(KUBECONFIG),,$(warning KUBECONFIG is not set))
 	@if kubectl get namespace msr4 &>/dev/null; then \
 	  echo "Removing MSR4 Helm release..."; \
@@ -73,7 +106,7 @@ msr4-cleanup:
 	  echo "MSR4 namespace not found. Nothing to clean."; \
 	fi
 
-generate-msr-values:
+generate-msr-values: ## Generate MSR4 Helm values from upstream
 	./artifacts/scripts/generate_msr_values.sh "$(MSR4_VERSION)"
 
 # -- MKE Stack: full cluster build ────────────────────────────────────────────
@@ -86,29 +119,49 @@ export YES
 export LOG
 export ADMIN_PASSWORD
 export MCR_VERSION
-mkestack:
+export MSR_VERSION
+mkestack: ## Full cluster build: destroy, init, apply, install MKE, install MSR
 	@./artifacts/scripts/mkestack.sh
+
+# -- Upgrade targets -----------------------------------------------------------
+#   make upgrade OLD_MKE_VERSION=4.1.5 NEW_MKE_VERSION=4.2.0
+#   make upgrade OLD_MKE_VERSION=4.1.5 NEW_MKE_VERSION=4.2.0 NEW_MSR_VERSION=4.13.6
+#   make upgrade NEW_MKE_VERSION=4.2.0 NEW_MSR_VERSION=4.13.6 YES=1
+OLD_MKE_VERSION  ?=
+NEW_MKE_VERSION  ?=
+OLD_MSR_VERSION  ?=
+NEW_MSR_VERSION  ?=
+OLD_MCR_VERSION  ?= 25.0.13
+NEW_MCR_VERSION  ?= 25.0.13
+export OLD_MKE_VERSION
+export NEW_MKE_VERSION
+export OLD_MSR_VERSION
+export NEW_MSR_VERSION
+export OLD_MCR_VERSION
+export NEW_MCR_VERSION
+upgrade: ## Upgrade MKE/MSR from OLD to NEW versions
+	@./artifacts/scripts/mkeupgrade.sh
 
 # -- Core targets -----------------------------------------------------------------
 
-init:
+init: ## Initialize terraform
 	terraform init
 	#python3 artifacts/scripts/render_hosts_from_state.py
 
 plan:
 	terraform plan
 
-apply:
+apply: ## Apply terraform (provision infrastructure)
 	terraform apply -auto-approve \
 	  -var "cluster_type=$(CLUSTER_TYPE)" \
 	  $(if $(filter mke3,$(CLUSTER_TYPE)),-var "mke3_version=$(MKE3_VERSION)") \
 	  $(if $(filter mke4,$(CLUSTER_TYPE)),-var "mke4_version=$(MKE4_VERSION)")
 
-destroy:
+destroy: ## Destroy all infrastructure
 	@terraform state list | rg '^acme_certificate\.' | xargs -r terraform state rm
 	terraform destroy
 
-mke3: CLUSTER_TYPE=mke3
+mke3: CLUSTER_TYPE=mke3 ## Install MKE3
 mke3: mke3-apply
 
 mke3-apply:
@@ -117,15 +170,15 @@ mke3-apply:
 	launchpad apply -c artifacts/configs/launchpad.yaml --debug
 	launchpad client-config -c artifacts/configs/launchpad.yaml
 
-mke4: CLUSTER_TYPE=mke4
+mke4: CLUSTER_TYPE=mke4 ## Install MKE4
 mke4: MKE4_VERSION ?= 4.2.0
 mke4: mke4-apply
 
-mke4.1: CLUSTER_TYPE=mke4
+mke4.1: CLUSTER_TYPE=mke4 ## Install MKE4 v4.1
 mke4.1: MKE4_VERSION = 4.1.5
 mke4.1: mke4-apply
 
-mke4.2: CLUSTER_TYPE=mke4
+mke4.2: CLUSTER_TYPE=mke4 ## Install MKE4 v4.2
 mke4.2: MKE4_VERSION = 4.2.0
 mke4.2: mke4-apply
 
@@ -139,10 +192,10 @@ mke4-apply:
 	terraform apply -auto-approve -var "cluster_type=mke4" -var "mke4_version=$(MKE4_VERSION)"
 	$(MKCTL_BIN) apply -f artifacts/configs/mke4-v$(MKE4_FILE_VERSION).yaml --admin-password "$(ADMIN_PASSWORD)" -l debug
 
-mke4-upgrade-prereq:
+mke4-upgrade-prereq: ## MKE3→MKE4 upgrade prerequisite (calico_kdd)
 	./artifacts/scripts/mke3_upgrade_prereq.sh
 
-mkectl-upgrade:
+mkectl-upgrade: ## Run mkectl upgrade (MKE3→MKE4 migration)
 	@test -f artifacts/configs/mkectl-upgrade.env || { echo "missing artifacts/configs/mkectl-upgrade.env; run make apply first"; exit 1; }
 	@set -a; . artifacts/configs/mkectl-upgrade.env; set +a; \
 	mkectl upgrade \
@@ -159,7 +212,7 @@ mkectl-upgrade:
 	  --gateway-https-node-port "$$MKCTL_UPGRADE_GATEWAY_HTTPS_NODE_PORT" \
 	  --force
 
-nuke-mke:
+nuke-mke: ## Cleanup MKE from all nodes
 	@echo "Starting MKE node cleanup..."
 	@set -e; \
 	for i in $$(terraform output -json all_hosts 2>/dev/null | jq -r '.[].public_ip'); do \
@@ -169,7 +222,7 @@ nuke-mke:
 	@echo "MKE cleanup complete!"
 
 
-msr4-dummy-data:
+msr4-dummy-data: ## Populate MSR4 with test data
 	./artifacts/scripts/msr4-dummy-data.sh
 
 

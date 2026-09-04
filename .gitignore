@@ -27,12 +27,25 @@ credentials/
 
 # Local artifacts and generated files
 artifacts/
-artifacts/tlscerts/
 logs/
 *.log
 *.bak
 *.swp
+*.swo
 .DS_Store
 *.out
-mke-config.toml
+
+# Stray files (never commit these)
+:q!
 nohup.out
+mke-config.toml
+
+# Editor temp files
+*~
+.*.swp
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
