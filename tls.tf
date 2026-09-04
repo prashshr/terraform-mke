@@ -157,6 +157,13 @@ resource "acme_certificate" "mke4" {
 
   account_key_pem               = acme_registration.mke4[0].account_key_pem
   common_name                   = local.mke4_tls_common_name
+  subject_alternative_names     = distinct(compact([
+    local.mke4_domain != local.mke4_tls_common_name ? local.mke4_domain : null,
+    local.mke4_ui_domain != local.mke4_tls_common_name ? local.mke4_ui_domain : null,
+    local.kof_domain != local.mke4_tls_common_name ? local.kof_domain : null,
+    local.k0rdent_ui_domain != local.mke4_tls_common_name ? local.k0rdent_ui_domain : null,
+    local.ingress_domain != local.mke4_tls_common_name ? local.ingress_domain : null,
+  ]))
   revoke_certificate_on_destroy = false
 
   dns_challenge {
