@@ -92,3 +92,26 @@ show_config() {
         echo "  No config file found. Using defaults."
     fi
 }
+
+# ── Timing helpers ───────────────────────────────────────────────────────────
+# Usage: source config_parser.sh then:
+#   phase_start "Phase Name"
+#   ... commands ...
+#   phase_end "Phase Name"
+declare -A _PHASE_START_TIMES
+
+phase_start() {
+  local name="$1"
+  _PHASE_START_TIMES[$name]=$(date +%s)
+  echo "=== $name started at $(date '+%H:%M:%S') ==="
+}
+
+phase_end() {
+  local name="$1"
+  local start=${_PHASE_START_TIMES[$name]:-0}
+  local end=$(date +%s)
+  local elapsed=$((end - start))
+  local mins=$((elapsed / 60))
+  local secs=$((elapsed % 60))
+  echo "=== $name completed in ${mins}m ${secs}s ==="
+}
