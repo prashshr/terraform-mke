@@ -29,6 +29,20 @@ data:
       "id": null,
       "links": [],
       "liveNow": false,
+      "templating": {
+        "list": [
+          {
+            "current": { "selected": true, "text": "Prometheus", "value": "prometheus" },
+            "hide": 2,
+            "includeAll": false,
+            "name": "DS_PROMETHEUS",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "type": "datasource"
+          }
+        ]
+      },
       "panels": [
         {
           "collapsed": false,
@@ -174,6 +188,20 @@ data:
       "id": null,
       "links": [],
       "liveNow": false,
+      "templating": {
+        "list": [
+          {
+            "current": { "selected": true, "text": "Prometheus", "value": "prometheus" },
+            "hide": 2,
+            "includeAll": false,
+            "name": "DS_PROMETHEUS",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "type": "datasource"
+          }
+        ]
+      },
       "panels": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -246,6 +274,20 @@ data:
       "id": null,
       "links": [],
       "liveNow": false,
+      "templating": {
+        "list": [
+          {
+            "current": { "selected": true, "text": "Prometheus", "value": "prometheus" },
+            "hide": 2,
+            "includeAll": false,
+            "name": "DS_PROMETHEUS",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "type": "datasource"
+          }
+        ]
+      },
       "panels": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -287,7 +329,7 @@ data:
     }
 EOF
 
-# 4. Custom PrometheusRules for Alertmanager
+# 4. Production PrometheusRules for Alertmanager (Cluster, Nodes, Workloads, Storage)
 kubectl apply -n mke -f - <<'EOF'
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -301,6 +343,15 @@ spec:
   groups:
   - name: mke4-core-alerts
     rules:
+    - alert: KubeNodeNotReady
+      expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node {{ $labels.node }} is NotReady"
+        description: "Node {{ $labels.node }} has been unready for more than 2 minutes."
+
     - alert: NodeHighCpuUsage
       expr: (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.85
       for: 5m
@@ -336,6 +387,15 @@ spec:
       annotations:
         summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently"
         description: "Container {{ $labels.container }} restarted more than 2 times in 5 minutes."
+
+    - alert: DeploymentReplicasMismatch
+      expr: kube_deployment_status_replicas_available{namespace!~"kube-system|calico-system"} != kube_deployment_spec_replicas{namespace!~"kube-system|calico-system"}
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has replica mismatch"
+        description: "Available replicas do not match desired count for more than 10 minutes."
 EOF
 
 echo "=== Prebuilt Dashboards & Alerts Deployed ==="

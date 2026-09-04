@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_mke4_ingresses.sh — Configure HTTP routes / ingresses for KOF and k0rdent-ui
+# setup_mke4_ingresses.sh — Configure HTTP routes / ingresses for KOF, k0rdent-ui and MSR4
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,9 +19,10 @@ fi
 ROOT_DOM="${ROOT_DOMAIN:-samkhya.cloud}"
 KOF_DOM="${KOF_APP_DOMAIN:-kof-mke}.${ROOT_DOM}"
 K0RDENT_DOM="${K0RDENT_UI_APP_DOMAIN:-k0rdent-ui}.${ROOT_DOM}"
+MSR4_DOM="${MSR4_APP_DOMAIN:-msr4}.${ROOT_DOM}"
 MKE4_UI_DOM="${MKE4_UI_DOMAIN:-mke4-ui}.${ROOT_DOM}"
 
-echo "=== Configuring MKE4 Ingress & Gateway Routes for KOF & k0rdent-ui ==="
+echo "=== Configuring MKE4 Ingress & Gateway Routes for KOF, k0rdent-ui & MSR4 ==="
 
 # 1. Deploy / verify KOF (Grafana) in kof namespace
 if [[ "${KOF_ENABLED:-true}" == "true" ]]; then
@@ -36,6 +37,7 @@ if [[ "${KOF_ENABLED:-true}" == "true" ]]; then
             --set "datasources.datasources\\.yaml.apiVersion=1" \
             --set "datasources.datasources\\.yaml.datasources[0].name=Prometheus" \
             --set "datasources.datasources\\.yaml.datasources[0].type=prometheus" \
+            --set "datasources.datasources\\.yaml.datasources[0].uid=prometheus" \
             --set "datasources.datasources\\.yaml.datasources[0].url=http://monitoring-kube-prometheus-prometheus.mke.svc.cluster.local:9090" \
             --set "datasources.datasources\\.yaml.datasources[0].access=proxy" \
             --set "datasources.datasources\\.yaml.datasources[0].isDefault=true" \
@@ -72,10 +74,27 @@ spec:
   to:
   - group: ""
     kind: Service
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-mke-gateway-msr4
+  namespace: msr4
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: mke
+  to:
+  - group: ""
+    kind: Service
 EOF
 
-# 3. Configure HTTPRoutes on Gateway mke-gateway-ingress-nodeport-https
-echo "  Applying Gateway HTTPRoutes for KOF (${KOF_DOM}), k0rdent-ui (${K0RDENT_DOM}), and MKE Dashboard (${MKE4_UI_DOM})..."
+# 3. Clean up any conflicting custom UI routes (let MKE manage its dashboard natively)
+KUBECONFIG="$KCFG" kubectl delete httproute ui-mke-dashboard-httproute dex-http-server-httproute -n mke >/dev/null 2>&1 || true
+
+# 4. Configure HTTPRoutes on Gateway mke-gateway-ingress-nodeport-https for KOF & k0rdent-ui
+echo "  Applying Gateway HTTPRoutes for KOF (${KOF_DOM}) and k0rdent-ui (${K0RDENT_DOM})..."
 KUBECONFIG="$KCFG" kubectl apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -126,11 +145,21 @@ spec:
       namespace: k0rdent
       port: 3000
       weight: 1
----
+EOF
+
+# 5. If MSR4 is deployed, configure MSR4 HTTPRoute
+if KUBECONFIG="$KCFG" kubectl get ns msr4 >/dev/null 2>&1; then
+  MSR4_SVC="msr4-harbor-nginx"
+  if ! KUBECONFIG="$KCFG" kubectl get svc -n msr4 "$MSR4_SVC" >/dev/null 2>&1; then
+    MSR4_SVC="harbor"
+  fi
+  if KUBECONFIG="$KCFG" kubectl get svc -n msr4 "$MSR4_SVC" >/dev/null 2>&1; then
+    echo "  Applying Gateway HTTPRoute for MSR4 (${MSR4_DOM}) -> msr4/${MSR4_SVC}..."
+    KUBECONFIG="$KCFG" kubectl apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: ui-mke-dashboard-httproute
+  name: msr4-httproute
   namespace: mke
 spec:
   parentRefs:
@@ -138,7 +167,7 @@ spec:
     kind: Gateway
     name: mke-gateway-ingress-nodeport-https
   hostnames:
-  - ${MKE4_UI_DOM}
+  - ${MSR4_DOM}
   rules:
   - matches:
     - path:
@@ -147,35 +176,16 @@ spec:
     backendRefs:
     - group: ""
       kind: Service
-      name: ui-mke-dashboard-chart
-      port: 5001
-      weight: 1
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: dex-http-server-httproute
-  namespace: mke
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: mke-gateway-ingress-nodeport-https
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /dex
-    backendRefs:
-    - group: ""
-      kind: Service
-      name: dex-http-server
+      name: ${MSR4_SVC}
+      namespace: msr4
       port: 80
       weight: 1
 EOF
+  fi
+fi
 
-# 4. Register Redirect URIs in Dex OAuth Server
-echo "  Synchronizing Dex OAuth redirectURIs for KOF and k0rdent-ui..."
+# 6. Register Redirect URIs in Dex OAuth Server
+echo "  Synchronizing Dex OAuth redirectURIs for KOF, k0rdent-ui & MSR4..."
 if KUBECONFIG="$KCFG" kubectl get secret -n mke authentication-dex >/dev/null 2>&1; then
     python3 -c "
 import yaml, base64, subprocess
@@ -191,7 +201,10 @@ domains = [
     'https://${KOF_DOM}/oauth/callback',
     'https://${K0RDENT_DOM}',
     'https://${K0RDENT_DOM}/oauth2/callback',
-    'https://${K0RDENT_DOM}/callback'
+    'https://${K0RDENT_DOM}/callback',
+    'https://${MSR4_DOM}',
+    'https://${MSR4_DOM}/c/login',
+    'https://${MSR4_DOM}/oauth/callback'
 ]
 
 needs_update = False

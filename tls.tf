@@ -1,12 +1,15 @@
 # ── TLS: Artifact directories ────────────────────────────────────────────────
 resource "null_resource" "artifacts_dirs" {
   provisioner "local-exec" {
-    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\" \"${local.msr4_tls_dir}\""
+    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_config_dir}\" \"${local.mke4_config_dir}\" \"${local.msr4_config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\" \"${local.msr4_tls_dir}\""
   }
 
   triggers = {
     ssh_dir         = local.ssh_dir
     config_dir      = local.config_dir
+    mke3_config_dir = local.mke3_config_dir
+    mke4_config_dir = local.mke4_config_dir
+    msr4_config_dir = local.msr4_config_dir
     tls_dir_mke3    = local.mke3_tls_dir
     tls_dir_ingress = local.ingress_tls_dir
     tls_dir_msr     = local.msr_tls_dir

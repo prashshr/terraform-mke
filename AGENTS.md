@@ -175,13 +175,14 @@ This project supports multiple providers and cluster types. Every change must pr
 ### Common Commands (Config-driven)
 ```bash
 make help              # Show clean, config-driven help
-make config-apply      # Generate terraform.tfvars from config
+make config-apply      # Generate terraform.tfvars from config.env
 make config-get        # Show current config values
-make config-edit       # Open config in editor
-make create mke4       # Deploy MKE4 cluster (auto-configured via config)
-make create mke3       # Deploy MKE3 cluster (auto-configured via config)
+make config-edit       # Open config.env in editor
+make create mke4       # Deploy MKE4 cluster (auto-configured via config.env)
+make create mke3       # Deploy MKE3 cluster (auto-configured via config.env)
 make create mke4stack  # Deploy MKE4 + MSR4
-make create mke3stack  # Deploy MKE3 + classic MSR
+make create mke3stack  # Deploy MKE3 + classic MSR2
+make update [mke3|mke4..] # Update running stack in-place with new config.env
 make list-running      # Rich tabular status with health, OS, IPs & versions
 make destroy mke4stack # Auto-approved destroy (default: FORCE_DESTROY=true)
 make destroy mke3stack # Auto-approved destroy

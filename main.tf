@@ -163,6 +163,8 @@ locals {
     local.aws_ingress_lb_dns != null ? [local.aws_ingress_lb_dns] : [],
     local.aws_api_lb_dns != null ? [local.aws_api_lb_dns] : [],
     local.aws_mke4_ui_lb_dns != null ? [local.aws_mke4_ui_lb_dns] : [],
+    local.aws_msr4_lb_dns != null ? [local.aws_msr4_lb_dns] : [],
+    local.aws_msr_lb_dns != null ? [local.aws_msr_lb_dns] : [],
     local.hetzner_manager_lb_ip != null ? [local.hetzner_manager_lb_ip] : [],
     local.hetzner_ingress_lb_ip != null ? [local.hetzner_ingress_lb_ip] : [],
     local.hetzner_api_lb_ip != null ? [local.hetzner_api_lb_ip] : [],
@@ -171,6 +173,9 @@ locals {
     [local.mke4_ui_domain],
     [local.kof_domain],
     [local.k0rdent_ui_domain],
+    [local.msr4_domain],
+    [local.ingress_domain],
+    [local.msr_domain],
     [for host in local.all_hosts : try(host.public_dns, null)],
     [for host in local.all_hosts : host.name],
     [for host in local.all_hosts : host.public_ip],
@@ -205,7 +210,7 @@ locals {
   }
 
   mkectl_upgrade_context = {
-    hosts_path              = "${local.config_dir}/hosts.yaml"
+    hosts_path              = "${local.mke4_config_dir}/hosts.yaml"
     mke3_admin_username     = var.admin_username
     mke3_admin_password     = var.admin_password
     mke3_external_address   = local.primary_manager_address

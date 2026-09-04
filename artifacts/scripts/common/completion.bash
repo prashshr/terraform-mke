@@ -14,6 +14,10 @@ _make_terraform_ps() {
             COMPREPLY=( $(compgen -W "mke3 mke4 mke3stack mke4stack" -- "$cur") )
             return 0
             ;;
+        update)
+            COMPREPLY=( $(compgen -W "mke3 mke4 mke3stack mke4stack" -- "$cur") )
+            return 0
+            ;;
         destroy)
             COMPREPLY=( $(compgen -W "mke3 mke4 mke3stack mke4stack" -- "$cur") )
             return 0
@@ -21,7 +25,7 @@ _make_terraform_ps() {
     esac
 
     # Top-level clean targets
-    local targets="help config-apply config-get config-edit create destroy list-running"
+    local targets="help config-apply config-get config-edit create update destroy list-running"
     COMPREPLY=( $(compgen -W "${targets}" -- "$cur") )
 }
 complete -F _make_terraform_ps make

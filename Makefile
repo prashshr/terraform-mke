@@ -21,7 +21,7 @@ MSR4_HA        ?= false
 MSR4_VERSION   ?= 4.13.5
 MSR4_DOMAIN    ?= msr4.$(shell terraform output -raw root_domain 2>/dev/null || echo "")
 
-.PHONY: help config-apply config-get config-edit create destroy list-running
+.PHONY: help config-apply config-get config-edit create update destroy list-running
 
 # ── Help ─────────────────────────────────────────────────────────────────
 help: ## Show this help (config-driven workflow)
@@ -33,9 +33,10 @@ help: ## Show this help (config-driven workflow)
 	@echo "  make config-edit           Open ./config.env in \$$EDITOR"
 	@echo "  make create mke3           Create MKE3 cluster (uses ./config.env)"
 	@echo "  make create mke4           Create MKE4 cluster (uses ./config.env)"
-	@echo "  make create mke3stack      Create MKE3 + classic MSR"
+	@echo "  make create mke3stack      Create MKE3 + classic MSR2"
 	@echo "  make create mke4stack      Create MKE4 + MSR4 (if MSR4_ENABLED=true)"
-	@echo "  make list-running          Show running stacks / terraform state"
+	@echo "  make update [mke3|mke4..]  Update running stack in-place with new config"
+	@echo "  make list-running          Show running stacks, health, nodes, and versions"
 	@echo "  make destroy mke3stack     Destroy mke3 stack"
 	@echo "  make destroy mke4stack     Destroy mke4 stack"
 	@echo ""
@@ -53,7 +54,7 @@ config-get: ## Show current config
 config-edit: ## Open ./config.env in $$EDITOR
 	$${EDITOR:-vi} config.env
 
-# ── Create / Destroy (config-driven) ───────────────────────────────────
+# ── Create (config-driven fresh deployment) ────────────────────────────
 create: ## Create stack: make create mke3|mke4|mke3stack|mke4stack
 	@arg="$(filter mke3 mke4 mke3stack mke4stack,$(MAKECMDGOALS))"; \
 	if [ -z "$$arg" ]; then \
@@ -88,16 +89,16 @@ _create_inner:
 	  $(if $(filter mke4,$(CLUSTER_TYPE)),-var "mke4_version=$(MKE4_VERSION)"); \
 	echo "→ install MKE (timeout $(MKECTL_TIMEOUT_MINS)m, SSH_KNOWN_HOSTS=/dev/null)..."; \
 	if [ "$(CLUSTER_TYPE)" = "mke3" ]; then \
-	  SSH_KNOWN_HOSTS=/dev/null launchpad apply -c artifacts/configs/launchpad.yaml --debug; \
-	  SSH_KNOWN_HOSTS=/dev/null launchpad client-config -c artifacts/configs/launchpad.yaml --disable-upgrade-check || true; \
-	  CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/launchpad.yaml | awk '{print $$2}' || echo "ps-mke"); \
+	  SSH_KNOWN_HOSTS=/dev/null launchpad apply -c artifacts/configs/mke3/launchpad.yaml --debug; \
+	  SSH_KNOWN_HOSTS=/dev/null launchpad client-config -c artifacts/configs/mke3/launchpad.yaml --disable-upgrade-check || true; \
+	  CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/mke3/launchpad.yaml | awk '{print $$2}' || echo "ps-mke"); \
 	  if [ -f "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" ]; then \
 	    cp "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" artifacts/configs/kubeconfig.yaml; \
 	  fi; \
 	else \
 	  MKE4_VER="$(MKE4_VERSION)"; MKE4_MINOR=$$(echo "$$MKE4_VER" | cut -d. -f1-2); BIN="artifacts/bin/mkectl-v$$MKE4_VER"; \
 	  [ -f "$$BIN" ] || artifacts/bin/download_mkectl.sh "$$MKE4_VER"; \
-	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)" --lease-adopt-stale; \
+	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)" --lease-adopt-stale; \
 	  if [ -f ~/.mke/mke.kubeconf ]; then cp ~/.mke/mke.kubeconf artifacts/configs/kubeconfig.yaml; fi; \
 	  ./artifacts/scripts/mke4/setup_mke4_ingresses.sh || true; \
 	fi; \
@@ -111,6 +112,61 @@ _create_inner:
 	  fi; \
 	fi
 
+# ── Update (in-place reconciliation without destroying infrastructure) ──
+update: ## Update stack in-place: make update [mke3|mke4|mke3stack|mke4stack]
+	@arg="$(filter mke3 mke4 mke3stack mke4stack,$(MAKECMDGOALS))"; \
+	source artifacts/scripts/common/config_parser.sh && load_config; \
+	if [ -z "$$arg" ]; then \
+		arg="$$CLUSTER_TYPE"; \
+	fi; \
+	case "$$arg" in \
+	  mke3)       CLUSTER_TYPE=mke3 STACK=0 ;; \
+	  mke4)       CLUSTER_TYPE=mke4 STACK=0 ;; \
+	  mke3stack)  CLUSTER_TYPE=mke3 STACK=1 ;; \
+	  mke4stack)  CLUSTER_TYPE=mke4 STACK=1 ;; \
+	esac; \
+	echo "→ make update $$arg  (CLUSTER_TYPE=$$CLUSTER_TYPE STACK=$$STACK)"; \
+	$(MAKE) --no-print-directory _update_inner CLUSTER_TYPE=$$CLUSTER_TYPE STACK=$$STACK MKECTL_TIMEOUT_MINS=$(MKECTL_TIMEOUT_MINS)
+
+_update_inner:
+	@mkdir -p logs; \
+	LOG_FILE="logs/update-$(CLUSTER_TYPE)-$$(date +%Y%m%d-%H%M%S).log"; \
+	echo "Logging output to $$LOG_FILE"; \
+	exec > >(tee -a "$$LOG_FILE") 2>&1; \
+	source artifacts/scripts/common/config_parser.sh && load_config; \
+	echo "→ config-apply (re-generating tfvars & product configs)..."; \
+	python3 artifacts/scripts/common/write_tfvars.py config.env terraform.tfvars; \
+	echo "→ terraform apply in-place (CLUSTER_TYPE=$(CLUSTER_TYPE))..."; \
+	terraform apply -auto-approve -var "cluster_type=$(CLUSTER_TYPE)" \
+	  $(if $(filter mke3,$(CLUSTER_TYPE)),-var "mke3_version=$(MKE3_VERSION)") \
+	  $(if $(and $(filter mke3,$(CLUSTER_TYPE)),$(filter 1,$(STACK))),-var "enable_msr=true") \
+	  $(if $(filter mke4,$(CLUSTER_TYPE)),-var "mke4_version=$(MKE4_VERSION)"); \
+	echo "→ reconciling cluster in-place (SSH_KNOWN_HOSTS=/dev/null)..."; \
+	if [ "$(CLUSTER_TYPE)" = "mke3" ]; then \
+	  SSH_KNOWN_HOSTS=/dev/null launchpad apply -c artifacts/configs/mke3/launchpad.yaml --debug; \
+	  SSH_KNOWN_HOSTS=/dev/null launchpad client-config -c artifacts/configs/mke3/launchpad.yaml --disable-upgrade-check || true; \
+	  CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/mke3/launchpad.yaml | awk '{print $$2}' || echo "ps-mke"); \
+	  if [ -f "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" ]; then \
+	    cp "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" artifacts/configs/kubeconfig.yaml; \
+	  fi; \
+	else \
+	  MKE4_VER="$(MKE4_VERSION)"; MKE4_MINOR=$$(echo "$$MKE4_VER" | cut -d. -f1-2); BIN="artifacts/bin/mkectl-v$$MKE4_VER"; \
+	  [ -f "$$BIN" ] || artifacts/bin/download_mkectl.sh "$$MKE4_VER"; \
+	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)" --lease-adopt-stale; \
+	  if [ -f ~/.mke/mke.kubeconf ]; then cp ~/.mke/mke.kubeconf artifacts/configs/kubeconfig.yaml; fi; \
+	  ./artifacts/scripts/mke4/setup_mke4_ingresses.sh || true; \
+	fi; \
+	if [ "$(STACK)" = "1" ]; then \
+	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
+	    source config.env; \
+	    echo "→ reconciling MSR4 (stack mode)..."; \
+	    ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$${MSR4_HA:-false}" = "true" ] && echo --ha ) --msr-version "$${MSR4_VERSION:-4.13.5}" --domain "$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}" --yes; \
+	  fi; \
+	fi; \
+	echo ""; \
+	./artifacts/scripts/common/list_running.sh
+
+# ── Destroy (config-driven teardown) ───────────────────────────────────
 destroy: ## Destroy stack: make destroy [mke4stack|mke3stack|mke4|mke3] (auto-approved by default)
 	@arg="$(filter mke3stack mke4stack mke3 mke4,$(MAKECMDGOALS))"; \
 	[ -z "$$arg" ] && arg="cluster"; \

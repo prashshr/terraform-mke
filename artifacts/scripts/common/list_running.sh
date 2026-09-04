@@ -38,6 +38,11 @@ EXPIRY_WARN="$(terraform -chdir="${REPO_DIR}" output -raw cluster_expiry_warning
 
 # Kubeconfig resolution
 KCFG="${REPO_DIR}/artifacts/configs/kubeconfig.yaml"
+if [[ -f "$HOME/.mke/mke.kubeconf" ]]; then
+    if [[ ! -f "$KCFG" ]] || [[ "$HOME/.mke/mke.kubeconf" -nt "$KCFG" ]] || ! KUBECONFIG="$KCFG" kubectl get nodes >/dev/null 2>&1; then
+        cp -f "$HOME/.mke/mke.kubeconf" "$KCFG" 2>/dev/null || true
+    fi
+fi
 if [[ ! -f "$KCFG" && -f "$HOME/.mke/mke.kubeconf" ]]; then
     KCFG="$HOME/.mke/mke.kubeconf"
 fi

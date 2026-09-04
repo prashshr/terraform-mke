@@ -2,7 +2,7 @@
 resource "local_sensitive_file" "launchpad" {
   count = local.render_mke3 ? 1 : 0
 
-  filename             = "${local.config_dir}/launchpad.yaml"
+  filename             = "${local.mke3_config_dir}/launchpad.yaml"
   file_permission      = "0600"
   directory_permission = "0700"
   content              = templatefile("${path.module}/templates/launchpad.yaml.tmpl", local.launchpad_context)
@@ -13,7 +13,7 @@ resource "local_sensitive_file" "launchpad" {
 resource "local_sensitive_file" "mke4" {
   count = local.render_mke4 ? 1 : 0
 
-  filename             = "${local.config_dir}/mke4-v${local.mke4_version_major_minor}.yaml"
+  filename             = "${local.mke4_config_dir}/mke4-v${local.mke4_version_major_minor}.yaml"
   file_permission      = "0600"
   directory_permission = "0700"
   content              = templatefile(local.mke4_template_path, local.mkectl_context)
@@ -24,7 +24,7 @@ resource "local_sensitive_file" "mke4" {
 resource "local_sensitive_file" "hosts" {
   count = local.should_render ? 1 : 0
 
-  filename             = "${local.config_dir}/hosts.yaml"
+  filename             = "${local.mke4_config_dir}/hosts.yaml"
   file_permission      = "0600"
   directory_permission = "0700"
   content              = templatefile("${path.module}/templates/hosts.yaml.tmpl", local.hosts_context)
@@ -35,7 +35,7 @@ resource "local_sensitive_file" "hosts" {
 resource "local_sensitive_file" "mkectl_upgrade_env" {
   count = local.should_render ? 1 : 0
 
-  filename             = "${local.config_dir}/mkectl-upgrade.env"
+  filename             = "${local.mke4_config_dir}/mkectl-upgrade.env"
   file_permission      = "0600"
   directory_permission = "0700"
   content              = <<-EOT
