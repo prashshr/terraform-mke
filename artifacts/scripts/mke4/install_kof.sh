@@ -60,6 +60,9 @@ helm upgrade --install kof grafana/grafana \
 # Configure Gateway routing
 "$REPO/artifacts/scripts/mke4/setup_mke4_ingresses.sh"
 
+# Deploy prebuilt dashboards and alert rules
+"$REPO/artifacts/scripts/mke4/kof_dashboards.sh"
+
 echo ""
 echo "=== KOF Monitoring Ready ==="
 echo "  UI URL:    https://${KOF_APP_DOMAIN:-kof-mke}.${ROOT_DOMAIN:-samkhya.cloud}"
