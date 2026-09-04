@@ -120,6 +120,23 @@ msr4-cleanup: ## Remove MSR4 from cluster
 generate-msr-values: ## Generate MSR4 Helm values from upstream
 	./artifacts/scripts/generate_msr_values.sh "$(MSR4_VERSION)"
 
+kof: ## Install KOF (KubeOnFlux) for MKE4 monitoring (MKE4 only)
+	./artifacts/scripts/install_kof.sh
+
+kof-cleanup: ## Remove KOF from cluster
+	helm uninstall kof -n kof 2>/dev/null || true
+	kubectl delete namespace kof --timeout=120s 2>/dev/null || true
+
+k0rdent-ui: ## Install k0rdent-ui for cluster management (MKE4 only)
+	./artifacts/scripts/install_k0rdent_ui.sh
+
+k0rdent-ui-cleanup: ## Remove k0rdent-ui from cluster
+	helm uninstall k0rdent-ui -n k0rdent-ui 2>/dev/null || true
+	kubectl delete namespace k0rdent-ui --timeout=120s 2>/dev/null || true
+
+nfs-setup: ## Setup NFS server on dedicated node
+	./artifacts/scripts/nfs_setup.sh /srv/nfs server
+
 # -- MKE Stack: full cluster build ────────────────────────────────────────────
 #   make mkestack
 #   YES=1 make mkestack

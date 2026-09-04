@@ -85,7 +85,7 @@ def generate_tfvars(config):
         'aws_root_volume_size', 'root_domain',
         'app_domain_mke3', 'app_domain_mke4', 'app_domain_ingress',
         'app_domain_msr', 'app_domain_msr4',
-        'enable_msr', 'airgap_enabled',
+        'enable_msr', 'airgap_enabled', 'nfs_enabled', 'kof_enabled', 'k0rdent_ui_enabled',
     ]
 
     for var in simple_vars:

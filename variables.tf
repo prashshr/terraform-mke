@@ -82,6 +82,12 @@ variable "airgap_enabled" {
   default     = false
 }
 
+variable "nfs_enabled" {
+  description = "Enable dedicated NFS server for MSR4 persistent storage."
+  type        = bool
+  default     = false
+}
+
 variable "mke3_version" {
   description = "Launchpad (MKE 3.x) version."
   type        = string
