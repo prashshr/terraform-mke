@@ -32,7 +32,7 @@ echo ""
 helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
 helm repo update grafana >/dev/null 2>&1 || true
 
-# Deploy Grafana with Prometheus datasource and dashboard sidecar
+# Deploy Grafana with explicitly pinned UID 'prometheus' and sidecar
 helm upgrade --install kof grafana/grafana \
     --namespace kof \
     --create-namespace \
@@ -41,6 +41,7 @@ helm upgrade --install kof grafana/grafana \
     --set "datasources.datasources\\.yaml.apiVersion=1" \
     --set "datasources.datasources\\.yaml.datasources[0].name=Prometheus" \
     --set "datasources.datasources\\.yaml.datasources[0].type=prometheus" \
+    --set "datasources.datasources\\.yaml.datasources[0].uid=prometheus" \
     --set "datasources.datasources\\.yaml.datasources[0].url=http://monitoring-kube-prometheus-prometheus.mke.svc.cluster.local:9090" \
     --set "datasources.datasources\\.yaml.datasources[0].access=proxy" \
     --set "datasources.datasources\\.yaml.datasources[0].isDefault=true" \
