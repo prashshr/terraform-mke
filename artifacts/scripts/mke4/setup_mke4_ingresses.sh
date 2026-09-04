@@ -197,12 +197,25 @@ cfg = yaml.safe_load(cfg_yaml)
 
 domains = [
     'https://${KOF_DOM}',
+    'https://${KOF_DOM}/',
+    'https://${KOF_DOM}:34001',
+    'https://${KOF_DOM}:34001/',
+    'https://${KOF_DOM}/login',
     'https://${KOF_DOM}/login/generic_oauth',
     'https://${KOF_DOM}/oauth/callback',
     'https://${K0RDENT_DOM}',
+    'https://${K0RDENT_DOM}/',
+    'https://${K0RDENT_DOM}:34001',
+    'https://${K0RDENT_DOM}:34001/',
+    'https://${K0RDENT_DOM}/login',
+    'https://${K0RDENT_DOM}/login?from=%2Flogin',
+    'https://${K0RDENT_DOM}/api/auth/callback/credentials',
+    'https://${K0RDENT_DOM}/api/auth/callback/oidc',
     'https://${K0RDENT_DOM}/oauth2/callback',
     'https://${K0RDENT_DOM}/callback',
     'https://${MSR4_DOM}',
+    'https://${MSR4_DOM}/',
+    'https://${MSR4_DOM}:34001',
     'https://${MSR4_DOM}/c/login',
     'https://${MSR4_DOM}/oauth/callback'
 ]
