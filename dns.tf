@@ -78,6 +78,7 @@ resource "cloudflare_record" "aws_mke4" {
 
 resource "cloudflare_record" "aws_msr4" {
   count = (local.cloudflare_enabled && local.aws_enabled && local.cloudflare_record_name_msr4 != null &&
+  try(length(trimspace(local.aws_msr4_lb_dns)) > 0, false) &&
   try(length(trimspace(local.cloudflare_zone_id)) > 0, false) && local.cloudflare_zone_id != "placeholder-zone-id") ? 1 : 0
 
   zone_id         = local.cloudflare_zone_id

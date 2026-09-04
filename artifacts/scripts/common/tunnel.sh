@@ -6,8 +6,8 @@
 # Uses the SSH key from artifacts/ssh/.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")/../.." && pwd)"
-source "$REPO/scripts/config_parser.sh"
+REPO="$(cd "$(dirname "$0")/../../.. && pwd)"
+source "$REPO/artifacts/scripts/common/config_parser.sh"
 load_config "$REPO/config"
 
 # ── Tunnel definitions ──────────────────────────────────────────────────────

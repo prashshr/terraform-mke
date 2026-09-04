@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 load_config() {
-    local config_file="${1:-${SCRIPT_DIR}/../../config}"
+    local config_file="${1:-${SCRIPT_DIR}/../../../config}"
 
     if [[ -f "$config_file" ]]; then
         # shellcheck disable=SC1090
@@ -69,20 +69,24 @@ load_config() {
     MONITORING_ENABLED="${MONITORING_ENABLED:-false}"
     EXPIRY_DAYS="${EXPIRY_DAYS:-0}"
 
+    MSR4_ENABLED="${MSR4_ENABLED:-false}"
     MSR4_HA="${MSR4_HA:-false}"
     MSR4_VERSION="${MSR4_VERSION:-4.13.5}"
     MSR4_HTTP_NODE_PORT="${MSR4_HTTP_NODE_PORT:-34002}"
     MSR4_HTTPS_NODE_PORT="${MSR4_HTTPS_NODE_PORT:-34003}"
     MSR4_METRICS_NODE_PORT="${MSR4_METRICS_NODE_PORT:-34004}"
 
-    ENABLE_MSR="${ENABLE_MSR:-true}"
+    ENABLE_MSR="${ENABLE_MSR:-false}"
     ARTIFACTS_DIR="${ARTIFACTS_DIR:-}"
     SAN_OVERRIDE="${SAN_OVERRIDE:-}"
+
+    FORCE_DESTROY="${FORCE_DESTROY:-true}"
+    MKECTL_TIMEOUT_MINS="${MKECTL_TIMEOUT_MINS:-60}"
 }
 
 # Show current config values
 show_config() {
-    local config_file="${1:-${SCRIPT_DIR}/../../config}"
+    local config_file="${1:-${SCRIPT_DIR}/../../../config}"
     echo "=== Current Configuration ==="
     echo "  Config file: $config_file"
     echo ""

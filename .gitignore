@@ -16,6 +16,8 @@ tfplan.*
 # Local Terraform variables and credentials
 terraform.tfvars
 *.tfvars
+.make.env
+.completion
 credentials/
 
 # Sensitive files
@@ -25,8 +27,14 @@ credentials/
 *.p12
 *.jks
 
-# Local artifacts and generated files
-artifacts/
+# Local artifacts — track scripts, ignore secrets and generated files
+artifacts/configs/
+artifacts/ssh/
+artifacts/tlscerts/
+artifacts/bin/
+artifacts/yamls/
+artifacts/msr4/values/
+artifacts/mke-license/
 logs/
 *.log
 *.bak

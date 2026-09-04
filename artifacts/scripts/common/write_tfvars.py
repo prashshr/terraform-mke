@@ -8,6 +8,22 @@ import sys
 import os
 
 
+def _strip_inline_comment(val):
+    """Remove trailing '# comment' not inside quotes."""
+    in_single = False
+    in_double = False
+    for i, ch in enumerate(val):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == '#' and not in_single and not in_double:
+            # require space or start before # to be a comment
+            if i == 0 or val[i-1].isspace():
+                return val[:i].rstrip()
+    return val
+
+
 def parse_config(config_path):
     """Parse bash config file into a dict. Strips surrounding quotes from values."""
     config = {}
@@ -20,10 +36,11 @@ def parse_config(config_path):
             if m:
                 key = m.group(1)
                 val = m.group(2).strip()
+                val = _strip_inline_comment(val)
                 # Strip surrounding quotes (bash sets them, we don't need them)
-                if val.startswith('"') and val.endswith('"'):
+                if len(val) >= 2 and val.startswith('"') and val.endswith('"'):
                     val = val[1:-1]
-                elif val.startswith("'") and val.endswith("'"):
+                elif len(val) >= 2 and val.startswith("'") and val.endswith("'"):
                     val = val[1:-1]
                 config[key] = val
     return config
@@ -179,7 +196,7 @@ def main():
     config_file = sys.argv[1] if len(sys.argv) > 1 else 'config'
     output_file = sys.argv[2] if len(sys.argv) > 2 else 'terraform.tfvars'
 
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     if not os.path.isabs(config_file):
         config_file = os.path.join(repo_root, config_file)
     if not os.path.isabs(output_file):

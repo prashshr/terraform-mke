@@ -1,39 +1,55 @@
 # ─── config ────────────────────────────────────────────────────────────────
-# Single source of truth for cluster configuration.
-# Used by: terraform.tfvars generation, Makefile, deployment scripts
+# Single source of truth for terraform-ps
+# Edit this, then run: make config-apply  →  make create mke4 (or mke3 etc)
 #
-# Edit this file, then run: make config-apply
+# This file is bash-sourceable — keep it simple: KEY="value" or KEY=true
+# Env vars override these if you export them before running make.
 # ──────────────────────────────────────────────────────────────────────────
 
-# ── Cluster ─────────────────────────────────────────────────────────────────
+# ── Cluster identity ──────────────────────────────────────────────────────
+# Name prefix for all AWS/Hetzner resources — keep it short & unique
 CLUSTER_NAME="ps-mke"
+# mke3 = classic Launchpad, mke4 = the new hotness (mkectl)
 CLUSTER_TYPE="mke4"
+# You’ll use this to log into MKE
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD="mkepassword"
 
-# ── Versions ────────────────────────────────────────────────────────────────
-MKE3_VERSION="3.8.7"
+# ── Versions ──────────────────────────────────────────────────────────────
+# Pick your poison — these get baked into terraform.tfvars
+MKE3_VERSION="3.8.11"
 MKE4_VERSION="4.2.0"
-MSR_VERSION="2.9.11"
-MCR_VERSION="29.6.1"
+MSR_VERSION="2.9.11"          # classic MSR (used with mke3)
+MCR_VERSION="25.0.13"          # container runtime, don’t overthink it
 
-# ── MKE4 Node Ports ────────────────────────────────────────────────────────
+# ── MKE4 NodePorts ────────────────────────────────────────────────────────
+# MKE4 gateway & UI live on NodePorts — 34000/34001 is the convention
 MKE4_UI_BACKEND_PORT=34001
 MKE4_GATEWAY_HTTP_NODE_PORT=34000
 MKE4_GATEWAY_HTTPS_NODE_PORT=34001
 
-# ── AWS ─────────────────────────────────────────────────────────────────────
+# ── Behaviour ─────────────────────────────────────────────────────────────
+# Auto-approve destroy? (true = no interactive confirmation prompt, false = ask me)
+FORCE_DESTROY=true
+# How long mkectl gets to finish before we call it a timeout (mins)
+MKECTL_TIMEOUT_MINS=60
+# Auto-nuke the cluster after N days (0 = lives forever)
+EXPIRY_DAYS=0
+
+# ── AWS ───────────────────────────────────────────────────────────────────
 AWS_ENABLED=true
 AWS_REGION="eu-west-1"
+# null = use env vars (AWS_ACCESS_KEY_ID etc), or set a profile name
 AWS_PROFILE="437775732836_PowerUserAccess"
 AWS_CREDENTIALS_FILE="credentials/aws-profile"
-AWS_ROOT_VOLUME_SIZE=120
+AWS_ROOT_VOLUME_SIZE=120       # GB, per node
 
-# AWS node pools (space-separated list of pool definitions)
-# Format: NAME:ROLES:OS:INSTANCE_TYPE:COUNT
-AWS_NODE_POOLS="aws-manager:manager:rhel96:m6id.xlarge:1 aws-worker:worker:rhel96:m6id.large:1 aws-msr:msr:rhel96:m6id.large:3"
+# Space-separated pools: NAME:ROLES:OS:INSTANCE_TYPE:COUNT
+# Roles = manager | worker | msr — mix & match as you like
+AWS_NODE_POOLS="aws-manager:manager:rhel96:m6id.xlarge:1 aws-worker:worker:rhel96:m6id.large:1"
 
-# ── Hetzner ─────────────────────────────────────────────────────────────────
+# ── Hetzner ───────────────────────────────────────────────────────────────
+# Flip to true if you want to play on Hetzner instead (or as well)
 HETZNER_ENABLED=false
 HETZNER_LOCATION="fsn1"
 HETZNER_CREDENTIALS_FILE="credentials/hetzner.token"
@@ -42,11 +58,11 @@ HETZNER_NETWORK_CIDR="10.42.0.0/16"
 HETZNER_SUBNET_CIDR="10.42.0.0/24"
 HETZNER_NETWORK_ZONE="eu-central"
 
-# Hetzner node pools
 # Format: NAME:ROLES:OS:SERVER_TYPE:COUNT[:PRIVATE_INTERFACE]
 HETZNER_NODE_POOLS="ps-hz-manager:manager:ubuntu2204:cx23:1:enp7s0 ps-hz-worker:worker:ubuntu2204:cx23:1:enp7s0 ps-hz-msr:msr:ubuntu2204:cx23:1:enp7s0"
 
-# ── Domains ─────────────────────────────────────────────────────────────────
+# ── Domains ───────────────────────────────────────────────────────────────
+# We glue APP_DOMAIN + ROOT_DOMAIN → FQDN (e.g. mke4test.samkhya.cloud)
 ROOT_DOMAIN="samkhya.cloud"
 APP_DOMAIN_MKE3="mke3test"
 APP_DOMAIN_MKE4="mke4test"
@@ -54,39 +70,47 @@ APP_DOMAIN_INGRESS="ingtest"
 APP_DOMAIN_MSR="msrtest"
 APP_DOMAIN_MSR4="msr4"
 
-# ── TLS ─────────────────────────────────────────────────────────────────────
+# ── TLS ───────────────────────────────────────────────────────────────────
 TLS_EMAIL="ops@samkhya.cloud"
-TLS_ACME_ENABLED=true
+TLS_ACME_ENABLED=true           # true = Let’s Encrypt, false = self-signed
 
-# TLS subsystems (true/false)
+# Per-subsystem toggles — usually just leave them on
 MKE3_TLS_ENABLED=true
 MKE4_TLS_ENABLED=true
 INGRESS_TLS_ENABLED=true
 MSR_TLS_ENABLED=true
 MSR4_TLS_ENABLED=true
 
-# ── Cloudflare ──────────────────────────────────────────────────────────────
+# ── Cloudflare ────────────────────────────────────────────────────────────
+# DNS records for *.samkhya.cloud — needs CLOUDFLARE_API_TOKEN env or token file
+# If enabled and token missing, terraform plan will whine (as it should)
 CLOUDFLARE_ENABLED=true
 CLOUDFLARE_ZONE_NAME="samkhya.cloud"
-CLOUDFLARE_API_TOKEN=""
+CLOUDFLARE_API_TOKEN=""        # leave empty to use $CLOUDFLARE_API_TOKEN env
 
-# ── Features ────────────────────────────────────────────────────────────────
-NFS_ENABLED=false
+# ── Features ──────────────────────────────────────────────────────────────
+# NFS server for MSR4 persistence (dedicated EC2, ~tiny cost)
+NFS_ENABLED=true
+# Airgap = bastion + private subnets + registry mirror (fancy, but slower)
 AIRGAP_ENABLED=false
-KOF_ENABLED=false
-KOF_PROFILE="lean"
-K0RDENT_UI_ENABLED=false
+# KOF = Kube on Flux monitoring (MKE4 only)
+KOF_ENABLED=true
+KOF_PROFILE="lean"              # lean or full
+# k0rdent UI — cluster management eye-candy (MKE4 only)
+K0RDENT_UI_ENABLED=true
 MONITORING_ENABLED=false
-EXPIRY_DAYS=0
 
-# ── MSR4 (Helm) ────────────────────────────────────────────────────────────
-MSR4_HA=false
-MSR4_VERSION="4.13.5"
+# ── MSR4 (Helm, goes on top of MKE4) ─────────────────────────────────────
+MSR4_ENABLED=true               # true = install MSR4 after MKE4
+MSR4_HA=false                    # true = 3 replicas + HA bits
+MSR4_VERSION="4.13.5"            # Helm chart version (4.13.x line)
 MSR4_HTTP_NODE_PORT=34002
 MSR4_HTTPS_NODE_PORT=34003
 MSR4_METRICS_NODE_PORT=34004
 
-# ── Misc ────────────────────────────────────────────────────────────────────
-ENABLE_MSR=true
-ARTIFACTS_DIR=""
-SAN_OVERRIDE=""
+# ── Legacy MSR (classic, for mke3) ───────────────────────────────────────
+ENABLE_MSR=false                 # true = classic MSR alongside mke3
+
+# ── Misc ──────────────────────────────────────────────────────────────────
+ARTIFACTS_DIR=""                 # "" = ./artifacts
+SAN_OVERRIDE=""                  # "" = auto from domains

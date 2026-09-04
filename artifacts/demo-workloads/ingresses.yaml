@@ -1,0 +1,210 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-1
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo1
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-2
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo2
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-3
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo3
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-4
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo4
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-5
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo5
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-6
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo6
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-7
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo7
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-8
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo8
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-9
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo9
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echo-10
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-rewrite-log: "true"
+spec:
+  ingressClassName: nginx-default
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - path: /echo10
+        pathType: Prefix
+        backend:
+          service:
+            name: echo-service
+            port:
+              number: 80

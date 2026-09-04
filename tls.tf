@@ -19,7 +19,7 @@ resource "null_resource" "artifacts_dirs" {
 data "external" "mke3_tls_existing" {
   count = local.mke3_tls_wants_acme ? 1 : 0
 
-  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+  program = ["bash", "${path.module}/artifacts/scripts/common/tls_cert_status.sh"]
 
   query = {
     domain            = local.mke3_tls_common_name
@@ -32,7 +32,7 @@ data "external" "mke3_tls_existing" {
 data "external" "mke4_tls_existing" {
   count = local.mke4_tls_wants_acme ? 1 : 0
 
-  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+  program = ["bash", "${path.module}/artifacts/scripts/common/tls_cert_status.sh"]
 
   query = {
     domain            = local.mke4_tls_common_name
@@ -45,7 +45,7 @@ data "external" "mke4_tls_existing" {
 data "external" "ingress_tls_existing" {
   count = local.ingress_tls_wants_acme ? 1 : 0
 
-  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+  program = ["bash", "${path.module}/artifacts/scripts/common/tls_cert_status.sh"]
 
   query = {
     domain            = local.ingress_tls_common_name
@@ -58,7 +58,7 @@ data "external" "ingress_tls_existing" {
 data "external" "msr_tls_existing" {
   count = local.msr_tls_wants_acme ? 1 : 0
 
-  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+  program = ["bash", "${path.module}/artifacts/scripts/common/tls_cert_status.sh"]
 
   query = {
     domain            = local.msr_tls_common_name
@@ -71,7 +71,7 @@ data "external" "msr_tls_existing" {
 data "external" "msr4_tls_existing" {
   count = local.msr4_tls_wants_acme ? 1 : 0
 
-  program = ["bash", "${path.module}/scripts/tls_cert_status.sh"]
+  program = ["bash", "${path.module}/artifacts/scripts/common/tls_cert_status.sh"]
 
   query = {
     domain            = local.msr4_tls_common_name
@@ -124,7 +124,7 @@ resource "null_resource" "mke3_tls_files" {
   }
 
   provisioner "local-exec" {
-    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    command = "bash \"${path.module}/artifacts/scripts/common/write_tls_cert.sh\""
     environment = {
       TLS_DIR       = local.mke3_tls_dir
       TLS_CA_FILE   = local.mke3_tls_ca_file
@@ -181,7 +181,7 @@ resource "null_resource" "mke4_tls_files" {
   }
 
   provisioner "local-exec" {
-    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    command = "bash \"${path.module}/artifacts/scripts/common/write_tls_cert.sh\""
     environment = {
       TLS_DIR       = local.mke4_tls_dir
       TLS_CA_FILE   = local.mke4_tls_ca_file
@@ -238,7 +238,7 @@ resource "null_resource" "ingress_tls_files" {
   }
 
   provisioner "local-exec" {
-    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    command = "bash \"${path.module}/artifacts/scripts/common/write_tls_cert.sh\""
     environment = {
       TLS_DIR       = local.ingress_tls_dir
       TLS_CA_FILE   = local.ingress_tls_ca_file
@@ -295,7 +295,7 @@ resource "null_resource" "msr_tls_files" {
   }
 
   provisioner "local-exec" {
-    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    command = "bash \"${path.module}/artifacts/scripts/common/write_tls_cert.sh\""
     environment = {
       TLS_DIR       = local.msr_tls_dir
       TLS_CA_FILE   = local.msr_tls_ca_file
@@ -352,7 +352,7 @@ resource "null_resource" "msr4_tls_files" {
   }
 
   provisioner "local-exec" {
-    command = "bash \"${path.module}/scripts/write_tls_cert.sh\""
+    command = "bash \"${path.module}/artifacts/scripts/common/write_tls_cert.sh\""
     environment = {
       TLS_DIR       = local.msr4_tls_dir
       TLS_CA_FILE   = local.msr4_tls_ca_file

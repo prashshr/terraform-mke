@@ -10,6 +10,21 @@ Terraform module for deploying MKE (Mirantis Kubernetes Engine) clusters on AWS 
 
 ---
 
+## Agent Git Identity
+
+**ALL commits made by AI agents MUST use this identity:**
+
+```bash
+git -c user.name="arhat-x" -c user.email="arhat-x@users.noreply.github.com" commit -m "..."
+```
+
+- Human commits → Prashant Sharma
+- Agent commits → arhat-x
+
+This ensures clear attribution in git history. Never use the human identity for agent commits.
+
+---
+
 ## Architecture
 
 ```
@@ -156,30 +171,20 @@ This project supports multiple providers and cluster types. Every change must pr
 - `variables.tf`: 360 lines — acceptable for now
 - `outputs.tf`: 49 lines — OK
 
-### Common Commands
+### Common Commands (Config-driven)
 ```bash
-make help              # Show all targets
-make init              # terraform init
-make plan              # terraform plan
-make apply             # terraform apply
-make destroy           # terraform destroy (removes ACME certs first)
-make mkestack          # Full lifecycle (interactive)
-make mke3 CLUSTER_TYPE=mke3   # Install MKE3
-make mke4 CLUSTER_TYPE=mke4   # Install MKE4
-make msr4              # Install MSR4
-make upgrade           # Upgrade MKE/MSR versions
-make msr4-cleanup      # Remove MSR4
-make kof               # Install KOF (MKE4 only)
-make kof-cleanup       # Remove KOF
-make k0rdent-ui        # Install k0rdent-ui (MKE4 only)
-make k0rdent-ui-cleanup # Remove k0rdent-ui
-make nfs-setup         # Setup NFS server
-make tunnel-open       # Open SSH tunnels (airgap)
-make tunnel-close      # Close all tunnels
-make tunnel-status     # Show active tunnels
+make help              # Show clean, config-driven help
 make config-apply      # Generate terraform.tfvars from config
 make config-get        # Show current config values
 make config-edit       # Open config in editor
+make create mke4       # Deploy MKE4 cluster (auto-configured via config)
+make create mke3       # Deploy MKE3 cluster (auto-configured via config)
+make create mke4stack  # Deploy MKE4 + MSR4
+make create mke3stack  # Deploy MKE3 + classic MSR
+make list-running      # Rich tabular status with health, OS, IPs & versions
+make destroy mke4stack # Auto-approved destroy (default: FORCE_DESTROY=true)
+make destroy mke3stack # Auto-approved destroy
+make destroy           # Auto-approved destroy of active cluster
 ```
 
 ### Testing New Features

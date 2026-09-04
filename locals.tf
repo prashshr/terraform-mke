@@ -227,6 +227,17 @@ locals {
   ssh_dir       = "${local.artifacts_dir}/ssh"
   config_dir    = "${local.artifacts_dir}/configs"
 
+  # Product-specific config directories
+  mke3_config_dir = "${local.config_dir}/mke3"
+  mke4_config_dir = "${local.config_dir}/mke4"
+  msr4_config_dir = "${local.config_dir}/msr4"
+
+  # MSR4 Helm values directory
+  msr4_values_dir = "${local.msr4_config_dir}/values"
+
+  # Demo workloads directory
+  demo_workloads_dir = "${local.artifacts_dir}/demo-workloads"
+
   launchpad_kind = var.enable_msr ? "mke+msr" : "mke"
 
   # Cluster type determines which config to render
@@ -234,7 +245,7 @@ locals {
   render_mke3  = local.should_render && local.cluster_type == "mke3"
   render_mke4  = local.should_render && local.cluster_type == "mke4"
 
-  # MKE4 license token from file
+  # MKE4 license
   mke4_license_file = "${local.artifacts_dir}/mke-license/nfr.lic"
   mke4_license_token = fileexists(local.mke4_license_file) ? trimspace(file(local.mke4_license_file)) : ""
 }
