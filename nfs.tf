@@ -77,11 +77,10 @@ resource "aws_security_group" "nfs" {
     description = "All outbound traffic"
   }
 
-  tags = {
-    Name    = "${local.nfs_name}-sg"
-    Cluster = local.cluster_name
-    Role    = "nfs"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.nfs_name}-sg"
+    Role = "nfs"
+  })
 }
 
 # ── NFS EBS volume ─────────────────────────────────────────────────────────
@@ -92,10 +91,9 @@ resource "aws_ebs_volume" "nfs" {
   size              = var.nfs_volume_size
   type              = "gp3"
 
-  tags = {
-    Name    = "${local.nfs_name}-data"
-    Cluster = local.cluster_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.nfs_name}-data"
+  })
 }
 
 resource "aws_volume_attachment" "nfs" {
@@ -185,11 +183,10 @@ resource "aws_instance" "nfs" {
     echo "NFS server ready." > /var/log/nfs-setup.log
   USERDATA
 
-  tags = {
-    Name    = local.nfs_name
-    Cluster = local.cluster_name
-    Role    = "nfs"
-  }
+  tags = merge(local.common_tags, {
+    Name = local.nfs_name
+    Role = "nfs"
+  })
 }
 
 # ── NFS outputs ────────────────────────────────────────────────────────────

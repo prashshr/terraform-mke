@@ -1,6 +1,13 @@
 locals {
   cluster_name = var.cluster_name
 
+  # Common tags applied to all resources
+  common_tags = {
+    Cluster   = var.cluster_name
+    ManagedBy = "terraform"
+    Project   = "terraform-ps"
+  }
+
   provider_defaults = {
     aws = {
       enabled                 = false

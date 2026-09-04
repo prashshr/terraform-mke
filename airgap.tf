@@ -103,11 +103,10 @@ resource "aws_security_group" "bastion" {
     description = "All outbound traffic"
   }
 
-  tags = {
-    Name    = "${local.bastion_name}-sg"
-    Cluster = local.cluster_name
-    Role    = "bastion"
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.bastion_name}-sg"
+    Role = "bastion"
+  })
 }
 
 # ── Bastion EIP ──────────────────────────────────────────────────────────────
@@ -117,10 +116,9 @@ resource "aws_eip" "bastion" {
   instance = try(aws_instance.bastion[0].id, "")
   domain   = "vpc"
 
-  tags = {
-    Name    = "${local.bastion_name}-eip"
-    Cluster = local.cluster_name
-  }
+  tags = merge(local.common_tags, {
+    Name = "${local.bastion_name}-eip"
+  })
 }
 
 # ── Bastion instance ────────────────────────────────────────────────────────
@@ -161,11 +159,10 @@ resource "aws_instance" "bastion" {
     echo "Bastion ready. Run Harbor setup manually." > /opt/harbor/STATUS
   USERDATA
 
-  tags = {
-    Name    = local.bastion_name
-    Cluster = local.cluster_name
-    Role    = "bastion"
-  }
+  tags = merge(local.common_tags, {
+    Name = local.bastion_name
+    Role = "bastion"
+  })
 }
 
 # ── Bastion outputs ─────────────────────────────────────────────────────────
