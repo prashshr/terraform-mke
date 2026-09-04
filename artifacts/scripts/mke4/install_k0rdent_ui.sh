@@ -4,8 +4,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.. && pwd)"
-source "$REPO/scripts/config_parser.sh"
-load_config "$REPO/config"
+source "$REPO/artifacts/scripts/common/config_parser.sh"
+load_config "$REPO/config.env"
 
 # ── Args ──────────────────────────────────────────────────────────────────
 KUBECONFIG="${KUBECONFIG:-$REPO/artifacts/configs/kubeconfig.yaml}"

@@ -8,7 +8,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.. && pwd)"
 source "$REPO/artifacts/scripts/common/config_parser.sh"
-load_config "$REPO/config"
+load_config "$REPO/config.env"
 
 # ── Tunnel definitions ──────────────────────────────────────────────────────
 # Format: SERVICE_NAME:LOCAL_PORT:REMOTE_IP:REMOTE_PORT

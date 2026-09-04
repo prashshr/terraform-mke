@@ -42,7 +42,8 @@ terraform-ps/
 ├── providers.tf               # AWS, Hetzner, Cloudflare, TLS, ACME, time providers
 ├── versions.tf                # Terraform and provider version constraints
 ├── checks.tf                  # Pre-apply validation checks (55 lines)
-├── config                     # Single source of truth (bash-sourceable)
+├── config.env                 # Single source of truth (bash-sourceable)
+├── config.env.default         # Default reference configuration file
 ├── Makefile                   # All build targets (~260 lines)
 ├── templates/
 │   ├── launchpad.yaml.tmpl    # MKE3 Launchpad config

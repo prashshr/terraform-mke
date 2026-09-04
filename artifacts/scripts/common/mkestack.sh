@@ -5,9 +5,9 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 
-# Load config from single config file
+# Load config from single config.env file
 source "$REPO/artifacts/scripts/common/config_parser.sh"
-load_config "$REPO/config"
+load_config "$REPO/config.env"
 
 AUTO_YES="${YES:-}"
 USE_LOG="${LOG:-}"

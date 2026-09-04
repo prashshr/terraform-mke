@@ -4,8 +4,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.. && pwd)"
-source "$REPO/scripts/config_parser.sh"
-load_config "$REPO/config"
+source "$REPO/artifacts/scripts/common/config_parser.sh"
+load_config "$REPO/config.env"
 
 # ── Args ──────────────────────────────────────────────────────────────────
 KOF_PROFILE="${KOF_PROFILE:-lean}"

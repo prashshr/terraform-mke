@@ -6,7 +6,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 load_config() {
-    local config_file="${1:-${SCRIPT_DIR}/../../../config}"
+    local default_file="${SCRIPT_DIR}/../../../config.env"
+    [[ ! -f "$default_file" && -f "${SCRIPT_DIR}/../../../config" ]] && default_file="${SCRIPT_DIR}/../../../config"
+    local config_file="${1:-$default_file}"
 
     if [[ -f "$config_file" ]]; then
         # shellcheck disable=SC1090
@@ -106,7 +108,9 @@ load_config() {
 
 # Show current config values
 show_config() {
-    local config_file="${1:-${SCRIPT_DIR}/../../../config}"
+    local default_file="${SCRIPT_DIR}/../../../config.env"
+    [[ ! -f "$default_file" && -f "${SCRIPT_DIR}/../../../config" ]] && default_file="${SCRIPT_DIR}/../../../config"
+    local config_file="${1:-$default_file}"
     echo "=== Current Configuration ==="
     echo "  Config file: $config_file"
     echo ""

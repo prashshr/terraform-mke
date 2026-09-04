@@ -44,7 +44,7 @@ output "cluster_expiry_warning" {
     Created: ${time_static.created[0].rfc3339}
     Expires: ${timeadd(time_static.created[0].rfc3339, "${var.expiry_days * 24}h")}
     Days remaining: ${max(0, var.expiry_days - (tonumber(formatdate("hh", timestamp())) / 24))}
-    To extend: Update EXPIRY_DAYS in config and run: make config-apply
+    To extend: Update EXPIRY_DAYS in config.env and run: make config-apply
     To destroy: make destroy
     EOT
   ) : "No expiry configured (EXPIRY_DAYS=0)"

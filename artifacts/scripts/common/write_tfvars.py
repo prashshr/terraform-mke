@@ -204,10 +204,15 @@ def generate_tfvars(config):
 
 
 def main():
-    config_file = sys.argv[1] if len(sys.argv) > 1 else 'config'
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+    if len(sys.argv) > 1:
+        config_file = sys.argv[1]
+    else:
+        config_file = 'config.env' if os.path.exists(os.path.join(repo_root, 'config.env')) else 'config'
+
     output_file = sys.argv[2] if len(sys.argv) > 2 else 'terraform.tfvars'
 
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     if not os.path.isabs(config_file):
         config_file = os.path.join(repo_root, config_file)
     if not os.path.isabs(output_file):

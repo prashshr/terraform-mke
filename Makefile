@@ -1,10 +1,10 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-# ── Load config values (if config exists) ───────────────────────────────
+# ── Load config values (if config.env exists) ───────────────────────────
 -include .make.env
-.make.env: config artifacts/scripts/common/config_parser.sh
-	@echo "# auto-generated from config — do not edit" > .make.env
+.make.env: config.env artifacts/scripts/common/config_parser.sh
+	@echo "# auto-generated from config.env — do not edit" > .make.env
 	@bash -c 'source artifacts/scripts/common/config_parser.sh; load_config; echo "CLUSTER_NAME ?= $$CLUSTER_NAME"; echo "CLUSTER_TYPE ?= $$CLUSTER_TYPE"; echo "MKE3_VERSION ?= $$MKE3_VERSION"; echo "MKE4_VERSION ?= $$MKE4_VERSION"; echo "MSR_VERSION ?= $$MSR_VERSION"; echo "MCR_VERSION ?= $$MCR_VERSION"; echo "FORCE_DESTROY ?= $$FORCE_DESTROY"; echo "MKECTL_TIMEOUT_MINS ?= $$MKECTL_TIMEOUT_MINS"' >> .make.env 2>/dev/null || true
 
 CLUSTER_TYPE        ?= mke4
@@ -28,30 +28,30 @@ help: ## Show this help (config-driven workflow)
 	@echo ""
 	@echo "terraform-ps — MKE on AWS/Hetzner (config-driven)"
 	@echo ""
-	@echo "  make config-apply          Generate terraform.tfvars from ./config"
+	@echo "  make config-apply          Generate terraform.tfvars from ./config.env"
 	@echo "  make config-get            Show current config"
-	@echo "  make config-edit           Open ./config in \$$EDITOR"
-	@echo "  make create mke3           Create MKE3 cluster (uses ./config)"
-	@echo "  make create mke4           Create MKE4 cluster (uses ./config)"
+	@echo "  make config-edit           Open ./config.env in \$$EDITOR"
+	@echo "  make create mke3           Create MKE3 cluster (uses ./config.env)"
+	@echo "  make create mke4           Create MKE4 cluster (uses ./config.env)"
 	@echo "  make create mke3stack      Create MKE3 + classic MSR"
 	@echo "  make create mke4stack      Create MKE4 + MSR4 (if MSR4_ENABLED=true)"
 	@echo "  make list-running          Show running stacks / terraform state"
 	@echo "  make destroy mke3stack     Destroy mke3 stack"
 	@echo "  make destroy mke4stack     Destroy mke4 stack"
 	@echo ""
-	@echo "All versions / toggles (airgap, HA, versions) come from ./config."
+	@echo "All versions / toggles (airgap, HA, versions) come from ./config.env."
 	@echo "Override: make create mke4 MKE4_VERSION=4.1.5"
 	@echo ""
 
 # ── Config management ───────────────────────────────────────────────────
-config-apply: ## Generate terraform.tfvars from ./config
-	python3 artifacts/scripts/common/write_tfvars.py config terraform.tfvars
+config-apply: ## Generate terraform.tfvars from ./config.env
+	python3 artifacts/scripts/common/write_tfvars.py config.env terraform.tfvars
 
 config-get: ## Show current config
 	@source artifacts/scripts/common/config_parser.sh && load_config && show_config
 
-config-edit: ## Open ./config in $$EDITOR
-	$${EDITOR:-vi} config
+config-edit: ## Open ./config.env in $$EDITOR
+	$${EDITOR:-vi} config.env
 
 # ── Create / Destroy (config-driven) ───────────────────────────────────
 create: ## Create stack: make create mke3|mke4|mke3stack|mke4stack
@@ -75,7 +75,7 @@ create: ## Create stack: make create mke3|mke4|mke3stack|mke4stack
 _create_inner:
 	@source artifacts/scripts/common/config_parser.sh && load_config; \
 	echo "→ config-apply..."; \
-	python3 artifacts/scripts/common/write_tfvars.py config terraform.tfvars; \
+	python3 artifacts/scripts/common/write_tfvars.py config.env terraform.tfvars; \
 	echo "→ terraform init/apply (CLUSTER_TYPE=$(CLUSTER_TYPE))..."; \
 	terraform init -input=false; \
 	terraform apply -auto-approve -var "cluster_type=$(CLUSTER_TYPE)" \
@@ -93,13 +93,13 @@ _create_inner:
 	fi; \
 	if [ "$(STACK)" = "1" ]; then \
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
-	    source config; \
+	    source config.env; \
 	    if [ "$$MSR4_ENABLED" = "true" ] || [ "$(MSR4_HA)" = "true" ]; then \
 	      echo "→ installing MSR4 (stack mode)..."; \
 	      ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$$MSR4_HA" = "true" ] && echo --ha ) --msr-version "$$MSR4_VERSION" --domain "$$MSR4_DOMAIN" --yes; \
-	    else echo "→ STACK=1 but MSR4_ENABLED=false — skipping MSR4 (set MSR4_ENABLED=true in config)"; fi; \
+	    else echo "→ STACK=1 but MSR4_ENABLED=false — skipping MSR4 (set MSR4_ENABLED=true in config.env)"; fi; \
 	  else \
-	    echo "→ installing classic MSR (mke3 stack) — enable_msr should be true in config"; \
+	    echo "→ installing classic MSR (mke3 stack) — enable_msr should be true in config.env"; \
 	  fi; \
 	fi
 
@@ -112,7 +112,7 @@ destroy: ## Destroy stack: make destroy [mke4stack|mke3stack|mke4|mke3] (auto-ap
 		terraform state list 2>/dev/null | grep -E '^acme_certificate\.' | xargs -r terraform state rm || true; \
 		terraform destroy -auto-approve; \
 	else \
-		echo "→ destroying $$arg (interactive prompt, set FORCE_DESTROY=true in config to auto-approve)..."; \
+		echo "→ destroying $$arg (interactive prompt, set FORCE_DESTROY=true in config.env to auto-approve)..."; \
 		terraform state list 2>/dev/null | grep -E '^acme_certificate\.' | xargs -r terraform state rm || true; \
 		terraform destroy; \
 	fi
