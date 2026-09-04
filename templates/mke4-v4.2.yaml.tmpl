@@ -152,7 +152,9 @@ spec:
     enabled: ${metallb_enabled}
   monitoring:
     enableCAdvisor: false
+    enableGrafana: true
     grafana:
+      enabled: true
       ingress: {}
     prometheus: {}
   network:
