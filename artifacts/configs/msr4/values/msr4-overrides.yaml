@@ -1,0 +1,5 @@
+expose:
+  tls:
+    certSource: secret
+    secret:
+      secretName: msr4-tls-cert

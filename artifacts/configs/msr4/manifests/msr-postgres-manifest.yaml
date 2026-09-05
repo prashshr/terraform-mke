@@ -1,0 +1,21 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: msr-postgres
+  namespace: msr4
+spec:
+  teamId: "msr"
+  volume:
+    size: 1Gi
+    storageClass: nfs-storage
+  numberOfInstances: 3
+  users:
+    msr:
+    - superuser
+    - createdb
+  databases:
+    registry: msr
+  postgresql:
+    version: "17"
+    parameters:
+      shared_preload_libraries: "pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_mke4_ingresses.sh — Configure HTTP routes / ingresses for KOF, k0rdent-ui and MSR4
+# setup_mke4_httproutes.sh — Configure Gateway API HTTPRoutes for KOF, k0rdent-ui & MSR4
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,22 +12,24 @@ KCFG="${REPO_DIR}/artifacts/configs/kubeconfig.yaml"
 [[ ! -f "$KCFG" && -f "$HOME/.mke/mke.kubeconf" ]] && KCFG="$HOME/.mke/mke.kubeconf"
 
 if [[ ! -f "$KCFG" ]]; then
-    echo "Kubeconfig not found. Skipping ingress setup."
+    echo "Kubeconfig not found. Skipping HTTPRoute setup."
     exit 0
 fi
 
 ROOT_DOM="${ROOT_DOMAIN:-samkhya.cloud}"
-KOF_DOM="${KOF_APP_DOMAIN:-kof-mke}.${ROOT_DOM}"
-K0RDENT_DOM="${K0RDENT_UI_APP_DOMAIN:-k0rdent-ui}.${ROOT_DOM}"
-MSR4_DOM="${MSR4_APP_DOMAIN:-msr4}.${ROOT_DOM}"
-MKE4_UI_DOM="${MKE4_UI_DOMAIN:-mke4-ui}.${ROOT_DOM}"
+export KOF_DOM="${KOF_APP_DOMAIN:-kof-mke}.${ROOT_DOM}"
+export K0RDENT_DOM="${K0RDENT_UI_APP_DOMAIN:-k0rdent-ui}.${ROOT_DOM}"
+export MSR4_DOM="${MSR4_APP_DOMAIN:-msr4}.${ROOT_DOM}"
+export MKE4_UI_DOM="${MKE4_UI_DOMAIN:-mke4-ui}.${ROOT_DOM}"
 
-echo "=== Configuring MKE4 Ingress & Gateway Routes for KOF, k0rdent-ui & MSR4 ==="
+echo "=== Configuring MKE4 Gateway HTTPRoutes for KOF, k0rdent-ui & MSR4 ==="
 
-# 1. Deploy / verify KOF (Grafana) in kof namespace
+# 1. Clean up any conflicting custom UI routes (let MKE manage its dashboard natively)
+KUBECONFIG="$KCFG" kubectl delete httproute ui-mke-dashboard-httproute dex-http-server-httproute -n mke >/dev/null 2>&1 || true
+
+# 2. Deploy KOF (Grafana) in kof namespace if enabled
 if [[ "${KOF_ENABLED:-true}" == "true" ]]; then
     echo "  Deploying/verifying KOF (Grafana) monitoring in namespace 'kof'..."
-    # Ensure prebuilt dashboards ConfigMap and Alertmanager PrometheusRules exist
     "${REPO_DIR}/artifacts/scripts/mke4/kof_dashboards.sh" >/dev/null 2>&1 || true
 
     if ! KUBECONFIG="$KCFG" helm status kof -n kof >/dev/null 2>&1; then
@@ -59,38 +61,29 @@ if [[ "${KOF_ENABLED:-true}" == "true" ]]; then
             --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].options.path=/var/lib/grafana/dashboards/default" \
             --wait --timeout=5m || echo "  [WARN] Grafana Helm install had non-fatal warning"
     fi
+
+    # Apply declarative KOF routes manifest
+    if [ -f "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" ]; then
+        envsubst < "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" | KUBECONFIG="$KCFG" kubectl apply -f -
+    fi
 fi
 
-# 2. Configure ReferenceGrants for cross-namespace routing
-KUBECONFIG="$KCFG" kubectl apply -f - <<EOF >/dev/null 2>&1 || true
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: ReferenceGrant
-metadata:
-  name: allow-mke-gateway-kof
-  namespace: kof
-spec:
-  from:
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    namespace: mke
-  to:
-  - group: ""
-    kind: Service
----
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: ReferenceGrant
-metadata:
-  name: allow-mke-gateway-k0rdent
-  namespace: k0rdent
-spec:
-  from:
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    namespace: mke
-  to:
-  - group: ""
-    kind: Service
----
+# 3. Configure k0rdent-ui HTTPRoutes if enabled
+if [[ "${K0RDENT_UI_ENABLED:-true}" == "true" ]]; then
+    if [ -f "${REPO_DIR}/artifacts/configs/k0rdent-ui/manifests/k0rdent-ui-routes.yaml" ]; then
+        envsubst < "${REPO_DIR}/artifacts/configs/k0rdent-ui/manifests/k0rdent-ui-routes.yaml" | KUBECONFIG="$KCFG" kubectl apply -f -
+    fi
+fi
+
+# 4. If MSR4 is deployed, configure MSR4 HTTPRoute
+if KUBECONFIG="$KCFG" kubectl get ns msr4 >/dev/null 2>&1; then
+    MSR4_SVC="msr4-harbor-nginx"
+    if ! KUBECONFIG="$KCFG" kubectl get svc -n msr4 "$MSR4_SVC" >/dev/null 2>&1; then
+        MSR4_SVC="harbor"
+    fi
+    if KUBECONFIG="$KCFG" kubectl get svc -n msr4 "$MSR4_SVC" >/dev/null 2>&1; then
+        echo "  Applying Gateway HTTPRoute for MSR4 (${MSR4_DOM}) -> msr4/${MSR4_SVC}..."
+        KUBECONFIG="$KCFG" kubectl apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
@@ -104,74 +97,7 @@ spec:
   to:
   - group: ""
     kind: Service
-EOF
-
-# 3. Clean up any conflicting custom UI routes (let MKE manage its dashboard natively)
-KUBECONFIG="$KCFG" kubectl delete httproute ui-mke-dashboard-httproute dex-http-server-httproute -n mke >/dev/null 2>&1 || true
-
-# 4. Configure HTTPRoutes on Gateway mke-gateway-ingress-nodeport-https for KOF & k0rdent-ui
-echo "  Applying Gateway HTTPRoutes for KOF (${KOF_DOM}) and k0rdent-ui (${K0RDENT_DOM})..."
-KUBECONFIG="$KCFG" kubectl apply -f - <<EOF
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: kof-grafana-httproute
-  namespace: mke
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: mke-gateway-ingress-nodeport-https
-  hostnames:
-  - ${KOF_DOM}
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /
-    backendRefs:
-    - group: ""
-      kind: Service
-      name: kof-grafana
-      namespace: kof
-      port: 80
-      weight: 1
 ---
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: k0rdent-ui-httproute
-  namespace: mke
-spec:
-  parentRefs:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: mke-gateway-ingress-nodeport-https
-  hostnames:
-  - ${K0RDENT_DOM}
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /
-    backendRefs:
-    - group: ""
-      kind: Service
-      name: kcm-k0rdent-ui
-      namespace: k0rdent
-      port: 3000
-      weight: 1
-EOF
-
-# 5. If MSR4 is deployed, configure MSR4 HTTPRoute
-if KUBECONFIG="$KCFG" kubectl get ns msr4 >/dev/null 2>&1; then
-  MSR4_SVC="msr4-harbor-nginx"
-  if ! KUBECONFIG="$KCFG" kubectl get svc -n msr4 "$MSR4_SVC" >/dev/null 2>&1; then
-    MSR4_SVC="harbor"
-  fi
-  if KUBECONFIG="$KCFG" kubectl get svc -n msr4 "$MSR4_SVC" >/dev/null 2>&1; then
-    echo "  Applying Gateway HTTPRoute for MSR4 (${MSR4_DOM}) -> msr4/${MSR4_SVC}..."
-    KUBECONFIG="$KCFG" kubectl apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -197,10 +123,10 @@ spec:
       port: 80
       weight: 1
 EOF
-  fi
+    fi
 fi
 
-# 6. Register Redirect URIs in Dex OAuth Server
+# 5. Register Redirect URIs in Dex OAuth Server
 echo "  Synchronizing Dex OAuth redirectURIs for KOF, k0rdent-ui & MSR4..."
 if KUBECONFIG="$KCFG" kubectl get secret -n mke authentication-dex >/dev/null 2>&1; then
     python3 -c "
@@ -257,4 +183,4 @@ else:
 " 2>/dev/null || echo "  [WARN] Dex patch failed or not needed"
 fi
 
-echo "=== MKE4 Gateway Ingress Routes configured ==="
+echo "=== MKE4 Gateway HTTPRoutes configured ==="

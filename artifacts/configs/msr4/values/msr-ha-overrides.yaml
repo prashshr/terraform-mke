@@ -1,0 +1,78 @@
+# HA Mode Overrides for MSR4
+# Applied on top of the base msr-values-<version>-single.yaml via Python merge
+# Changes: external DB/Redis, RWX storage via NFS, 2+ replicas per component
+---
+expose:
+  type: nodePort
+  tls:
+    enabled: true
+  certSource: secret
+  secret:
+    secretName: msr4-tls-cert
+nodePort:
+  name: harbor
+  ports:
+    http:
+      port: 80
+      nodePort: 35080
+    https:
+      port: 443
+      nodePort: 35443
+
+# Persistence — RWX via nfs-storage StorageClass
+persistence:
+  enabled: true
+  resourcePolicy: "keep"
+  persistentVolumeClaim:
+    registry:
+      storageClass: nfs-storage
+      accessMode: ReadWriteMany
+      size: 10Gi
+    jobservice:
+      jobLog:
+        storageClass: nfs-storage
+        accessMode: ReadWriteMany
+        size: 10Gi
+    trivy:
+      storageClass: nfs-storage
+      accessMode: ReadWriteMany
+      size: 10Gi
+    # Internal database/redis PVCs are NOT used when type=external
+    database:
+      storageClass: nfs-storage
+      accessMode: ReadWriteOnce
+      size: 1Gi
+    redis:
+      storageClass: nfs-storage
+      accessMode: ReadWriteOnce
+      size: 1Gi
+
+# HA replicas — minimum 2 per MSR documentation
+portal:
+  replicas: 2
+core:
+  replicas: 2
+jobservice:
+  replicas: 2
+registry:
+  replicas: 2
+trivy:
+  replicas: 2
+
+# External PostgreSQL — host/port/secret filled dynamically by install script
+database:
+  type: external
+  external:
+    sslmode: require
+    host: "127.0.0.1"       # placeholder — overridden by install_msr4.sh
+    port: 5432              # placeholder — overridden by install_msr4.sh
+    coreDatabase: registry
+    username: msr
+    existingSecret: msr.msr-postgres.credentials.postgresql.acid.zalan.do
+
+# External Redis (Sentinel) — addr filled dynamically by install script
+redis:
+  type: external
+  external:
+    addr: "msr-redis-s-0.msr-redis-s-hl.msr4.svc.cluster.local:26379"  # placeholder — overridden
+    existingSecret: msr-redis-secret

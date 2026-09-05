@@ -62,8 +62,8 @@ helm upgrade --install kof grafana/grafana \
     --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].options.path=/var/lib/grafana/dashboards/default" \
     --wait --timeout=5m
 
-# Configure Gateway routing
-"$REPO/artifacts/scripts/mke4/setup_mke4_ingresses.sh"
+# Configure Gateway HTTPRoutes
+"$REPO/artifacts/scripts/mke4/setup_mke4_httproutes.sh"
 
 echo ""
 echo "=== KOF Monitoring Ready ==="

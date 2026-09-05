@@ -27,8 +27,12 @@ credentials/
 *.p12
 *.jks
 
-# Local artifacts — track scripts, ignore secrets and generated files
-artifacts/configs/
+# Local artifacts — track scripts and manifests, ignore generated runtime files
+artifacts/configs/*.yaml
+artifacts/configs/*.env
+artifacts/configs/mke3/
+artifacts/configs/mke4/
+artifacts/configs/msr4/*.env
 artifacts/ssh/
 artifacts/tlscerts/
 artifacts/bin/

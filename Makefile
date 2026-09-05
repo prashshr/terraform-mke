@@ -100,7 +100,7 @@ _create_inner:
 	  [ -f "$$BIN" ] || artifacts/bin/download_mkectl.sh "$$MKE4_VER"; \
 	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)" --lease-adopt-stale; \
 	  if [ -f ~/.mke/mke.kubeconf ]; then cp ~/.mke/mke.kubeconf artifacts/configs/kubeconfig.yaml; fi; \
-	  ./artifacts/scripts/mke4/setup_mke4_ingresses.sh || true; \
+	  ./artifacts/scripts/mke4/setup_mke4_httproutes.sh || true; \
 	fi; \
 	if [ "$(STACK)" = "1" ]; then \
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
@@ -154,7 +154,7 @@ _update_inner:
 	  [ -f "$$BIN" ] || artifacts/bin/download_mkectl.sh "$$MKE4_VER"; \
 	  SSH_KNOWN_HOSTS=/dev/null "$$BIN" apply -f "artifacts/configs/mke4/mke4-v$$MKE4_MINOR.yaml" --admin-password "$$ADMIN_PASSWORD" -l debug --timeout-minutes "$(MKECTL_TIMEOUT_MINS)" --lease-adopt-stale; \
 	  if [ -f ~/.mke/mke.kubeconf ]; then cp ~/.mke/mke.kubeconf artifacts/configs/kubeconfig.yaml; fi; \
-	  ./artifacts/scripts/mke4/setup_mke4_ingresses.sh || true; \
+	  ./artifacts/scripts/mke4/setup_mke4_httproutes.sh || true; \
 	fi; \
 	if [ "$(STACK)" = "1" ]; then \
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
