@@ -456,12 +456,14 @@ resource "null_resource" "resize_root_volume" {
     desired_size = coalesce(each.value.root_volume_size, var.root_volume_size, 120)
   }
 
-  provisioner "local-exec" {
+    provisioner "local-exec" {
     interpreter = ["/bin/bash", "-c"]
     command     = <<-EOT
       set -euo pipefail
-      ${var.profile != null ? "export AWS_PROFILE=\"${var.profile}\"" : ""}
-      ${var.shared_credentials_file != null ? "export AWS_SHARED_CREDENTIALS_FILE=\"${abspath(var.shared_credentials_file)}\"" : ""}
+      if [ -z "$${AWS_ACCESS_KEY_ID:-}" ]; then
+        ${var.profile != null ? "export AWS_PROFILE=\"${var.profile}\"" : ""}
+        ${var.shared_credentials_file != null ? "export AWS_SHARED_CREDENTIALS_FILE=\"${abspath(var.shared_credentials_file)}\"" : ""}
+      fi
       INSTANCE_ID="${aws_instance.node[each.key].id}"
       VOLUME_SIZE=${coalesce(each.value.root_volume_size, var.root_volume_size, 120)}
       REGION="${data.aws_region.current.name}"

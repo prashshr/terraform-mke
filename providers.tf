@@ -1,11 +1,14 @@
 provider "aws" {
   region = local.aws_settings_map.region
 
-  # Credential chain: profile → shared_credentials → env vars (AWS_ACCESS_KEY_ID etc.)
-  profile = local.aws_enabled && local.aws_settings_map.profile != "" ? local.aws_settings_map.profile : null
+  # Credential precedence:
+  # 1. Environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN)
+  # 2. Profile configuration (AWS_PROFILE or local.aws_settings_map.profile)
+  # 3. Shared credentials file (credentials/aws-profile)
+  profile = !local.aws_has_env_credentials && local.aws_enabled && local.aws_settings_map.profile != "" ? local.aws_settings_map.profile : null
 
-  shared_credentials_files = local.aws_enabled && local.aws_settings_map.shared_credentials_file != "" ? [
-    local.aws_settings_map.shared_credentials_file
+  shared_credentials_files = !local.aws_has_env_credentials && local.aws_enabled && local.aws_credentials_file != null ? [
+    local.aws_credentials_file
   ] : []
 
   skip_credentials_validation = !local.aws_settings_map.enabled

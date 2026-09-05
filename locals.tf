@@ -162,6 +162,31 @@ locals {
   hetzner_enabled = try(local.hetzner_settings_map.enabled, false) && length(try(local.hetzner_settings_map.node_pools, [])) > 0
   azure_enabled   = try(local.azure_settings_map.enabled, false) && length(try(local.azure_settings_map.node_pools, [])) > 0
   vsphere_enabled = try(local.vsphere_settings_map.enabled, false) && length(try(local.vsphere_settings_map.node_pools, [])) > 0
+
+  # Detect if valid, non-empty AWS credentials are provided via environment variables (AWS_ACCESS_KEY_ID)
+  # When present, environment variables take precedence. Otherwise, fall back to profile & credentials file.
+  aws_env_access_key = local.aws_enabled && fileexists("/proc/self/environ") ? (
+    try(element([
+      for entry in split("\u0000", file("/proc/self/environ")) :
+      trimprefix(entry, "AWS_ACCESS_KEY_ID=")
+      if startswith(entry, "AWS_ACCESS_KEY_ID=") && length(trimspace(trimprefix(entry, "AWS_ACCESS_KEY_ID="))) > 0
+    ], 0), null)
+  ) : null
+
+  aws_has_env_credentials = local.aws_env_access_key != null
+
+  # Absolute path to shared credentials file for fallback
+  aws_credentials_file = (
+    local.aws_settings_map.shared_credentials_file != null &&
+    local.aws_settings_map.shared_credentials_file != "" ?
+    (
+      fileexists("${path.root}/${local.aws_settings_map.shared_credentials_file}") ?
+      abspath("${path.root}/${local.aws_settings_map.shared_credentials_file}") :
+      pathexists(local.aws_settings_map.shared_credentials_file) ?
+      abspath(local.aws_settings_map.shared_credentials_file) :
+      "${path.root}/${local.aws_settings_map.shared_credentials_file}"
+    ) : null
+  )
   cloudflare_enabled = try(local.cloudflare_settings_map.enabled, false) && (
     try(length(trimspace(local.cloudflare_settings_map.zone_id)) > 0, false) ||
     try(length(trimspace(local.cloudflare_settings_map.zone_name)) > 0, false)
