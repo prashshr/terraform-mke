@@ -10,12 +10,12 @@ export KUBECONFIG
 
 echo "=== Deploying Prebuilt Grafana Dashboards & Prometheus Alerts ==="
 
-# 1. Cluster Overview Dashboard ConfigMap
+# 1. Single unified ConfigMap with all curated dashboards for direct Grafana volume mounting
 kubectl apply -n kof -f - <<'EOF'
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: grafana-dashboard-k8s-cluster
+  name: grafana-dashboards-default
   namespace: kof
   labels:
     grafana_dashboard: "1"
@@ -167,18 +167,6 @@ data:
       "uid": "k8s-cluster-overview",
       "version": 1
     }
-EOF
-
-# 2. Node Exporter Full Dashboard ConfigMap
-kubectl apply -n kof -f - <<'EOF'
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-dashboard-node-exporter
-  namespace: kof
-  labels:
-    grafana_dashboard: "1"
-data:
   node-exporter.json: |
     {
       "annotations": { "list": [] },
@@ -253,18 +241,6 @@ data:
       "uid": "node-exporter-full",
       "version": 1
     }
-EOF
-
-# 3. Pods & Workloads Dashboard ConfigMap
-kubectl apply -n kof -f - <<'EOF'
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-dashboard-k8s-workloads
-  namespace: kof
-  labels:
-    grafana_dashboard: "1"
-data:
   k8s-workloads.json: |
     {
       "annotations": { "list": [] },
@@ -329,7 +305,7 @@ data:
     }
 EOF
 
-# 4. Production PrometheusRules for Alertmanager (Cluster, Nodes, Workloads, Storage)
+# 2. Production PrometheusRules for Alertmanager
 kubectl apply -n mke -f - <<'EOF'
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
