@@ -1,0 +1,34 @@
+# ─── KOF Deployment Profile: LEAN ───────────────────────────────────────────
+# Cluster-monitoring-only profile for MKE4.
+# Includes:
+#   - Core metrics & logging (Prometheus / VictoriaMetrics + VictoriaLogs)
+#   - Pod stdout + host/syslog telemetry, kubelet/cAdvisor, KCM & Node dashboards
+# Drops components that carry no data on a self-monitoring cluster:
+#   - VictoriaTraces (tracing omitted)
+#   - OpenCost / FinOps (cost reporting omitted)
+# ──────────────────────────────────────────────────────────────────────────
+
+kof-regional:
+  enabled: false
+kof-child:
+  enabled: false
+
+kof-storage:
+  enabled: true
+  values:
+    # No tracing in lean — removes vtstorage/vtinsert/vtselect and associated PVCs
+    victoria-traces-cluster:
+      enabled: false
+
+kof-collectors:
+  enabled: true
+  values:
+    # No FinOps in lean — removes OpenCost deployment
+    opencost:
+      enabled: false
+    kcm:
+      monitoring: true
+    opentelemetry-kube-stack:
+      clusterName: mothership
+      prometheus-node-exporter:
+        hostNetwork: false
