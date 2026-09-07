@@ -27,43 +27,10 @@ echo "=== Configuring MKE4 Gateway HTTPRoutes for KOF, k0rdent-ui & MSR4 ==="
 # 1. Clean up any conflicting custom UI routes (let MKE manage its dashboard natively)
 KUBECONFIG="$KCFG" kubectl delete httproute ui-mke-dashboard-httproute dex-http-server-httproute -n mke >/dev/null 2>&1 || true
 
-# 2. Deploy KOF (Grafana) in kof namespace if enabled
+# 2. Configure KOF (Grafana) HTTPRoutes if enabled
 if [[ "${KOF_ENABLED:-true}" == "true" ]]; then
-    echo "  Deploying/verifying KOF (Grafana) monitoring in namespace 'kof'..."
-    "${REPO_DIR}/artifacts/scripts/mke4/kof_dashboards.sh" >/dev/null 2>&1 || true
-
-    if ! KUBECONFIG="$KCFG" helm status kof -n kof >/dev/null 2>&1; then
-        KUBECONFIG="$KCFG" helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
-        KUBECONFIG="$KCFG" helm repo update >/dev/null 2>&1 || true
-        KUBECONFIG="$KCFG" helm upgrade --install kof grafana/grafana \
-            --namespace kof \
-            --create-namespace \
-            --set adminUser="${ADMIN_USERNAME:-admin}" \
-            --set adminPassword="${ADMIN_PASSWORD:-mkepassword}" \
-            --set "datasources.datasources\\.yaml.apiVersion=1" \
-            --set "datasources.datasources\\.yaml.datasources[0].name=Prometheus" \
-            --set "datasources.datasources\\.yaml.datasources[0].type=prometheus" \
-            --set "datasources.datasources\\.yaml.datasources[0].uid=prometheus" \
-            --set "datasources.datasources\\.yaml.datasources[0].url=http://monitoring-kube-prometheus-prometheus.mke.svc.cluster.local:9090" \
-            --set "datasources.datasources\\.yaml.datasources[0].access=proxy" \
-            --set "datasources.datasources\\.yaml.datasources[0].isDefault=true" \
-            --set "dashboardsConfigMaps.default=grafana-dashboards-default" \
-            --set "sidecar.dashboards.enabled=true" \
-            --set "sidecar.dashboards.searchNamespace=ALL" \
-            --set "sidecar.datasources.enabled=true" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.apiVersion=1" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].name=default" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].orgId=1" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].folder=" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].type=file" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].disableDeletion=false" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].editable=true" \
-            --set "dashboardProviders.dashboardproviders\\.yaml.providers[0].options.path=/var/lib/grafana/dashboards/default" \
-            --wait --timeout=5m || echo "  [WARN] Grafana Helm install had non-fatal warning"
-    fi
-
-    # Apply declarative KOF routes manifest
     if [ -f "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" ]; then
+        echo "  Applying Gateway HTTPRoute for KOF (${KOF_DOM})..."
         envsubst < "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" | KUBECONFIG="$KCFG" kubectl apply -f -
     fi
 fi
@@ -71,6 +38,7 @@ fi
 # 3. Configure k0rdent-ui HTTPRoutes if enabled
 if [[ "${K0RDENT_UI_ENABLED:-true}" == "true" ]]; then
     if [ -f "${REPO_DIR}/artifacts/configs/k0rdent-ui/manifests/k0rdent-ui-routes.yaml" ]; then
+        echo "  Applying Gateway HTTPRoute for k0rdent-ui (${K0RDENT_DOM})..."
         envsubst < "${REPO_DIR}/artifacts/configs/k0rdent-ui/manifests/k0rdent-ui-routes.yaml" | KUBECONFIG="$KCFG" kubectl apply -f -
     fi
 fi
