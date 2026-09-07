@@ -11,9 +11,6 @@ KOF_DIR="${REPO}/artifacts/configs/kof"
 KOF_PROFILE="${KOF_PROFILE:-lean}"
 KOF_VERSION="1.8.1"
 KOF_REGISTRY="registry.mirantis.com/k0rdent-enterprise"
-KOF_KCM_NAMESPACE="k0rdent"
-KOF_GRAFANA_IMAGE_TAG="11.0.0"
-KOF_STORAGE_SIZE="10Gi"
 KUBECONFIG="${KUBECONFIG:-$REPO/artifacts/configs/kubeconfig.yaml}"
 [[ ! -f "$KUBECONFIG" && -f "$HOME/.mke/mke.kubeconf" ]] && KUBECONFIG="$HOME/.mke/mke.kubeconf"
 export KUBECONFIG
@@ -32,11 +29,11 @@ echo ""
 echo "=== Installing KOF (KubeOnFlux ${KOF_VERSION}) ==="
 echo "  Profile:      ${KOF_PROFILE}"
 echo "  Registry:     ${KOF_REGISTRY}"
-echo "  Namespace:    kof (KCM: ${KOF_KCM_NAMESPACE})"
+echo "  Namespace:    kof"
 echo ""
 
 # Preflight checks
-for tool in yq jq helm kubectl; do
+for tool in helm kubectl; do
     command -v "${tool}" >/dev/null 2>&1 || { echo "ERROR: KOF requires '${tool}' in PATH."; exit 1; }
 done
 
@@ -53,8 +50,7 @@ resolve_storageclass() {
         elif kubectl get sc nfs-client >/dev/null 2>&1; then
             sc="nfs-client"
         else
-            echo "ERROR: No default StorageClass found. Deploy NFS storage first."
-            exit 1
+            sc="nfs-storage"
         fi
     fi
     echo "${sc}"
@@ -64,56 +60,25 @@ SC="$(resolve_storageclass)"
 echo "  StorageClass: ${SC}"
 
 # Exempt kof namespace from MKE ucpauthz admission policy
-exempt_ucpauthz() {
-    local ns_sa="system:serviceaccount:kof:opentelemetry-operator"
-    local cfg
-    cfg="$(mktemp "${TMPDIR:-/tmp}/kof-ucpauthz-XXXX.yaml")"
-    if [ -f "$REPO/artifacts/bin/mkectl-v4.2.0" ]; then
-        "$REPO/artifacts/bin/mkectl-v4.2.0" config get 2>/dev/null | sed -n '/^apiVersion:/,$p' > "${cfg}" || true
-        if [ -s "${cfg}" ]; then
-            if ! NS_SA="${ns_sa}" yq -e '
-                ((.spec.apiServer.ucpauthz.exemptNamespaces // []) | contains(["kof"]))
-                and ((.spec.apiServer.ucpauthz.exemptUsers // []) | contains([strenv(NS_SA)]))
-            ' "${cfg}" >/dev/null 2>&1; then
-                echo "  Exempting kof from MKE ucpauthz policy..."
-                NS_SA="${ns_sa}" yq -i '
-                    .spec.apiServer.ucpauthz.disabled = (.spec.apiServer.ucpauthz.disabled // false)
-                  | .spec.apiServer.ucpauthz.exemptNamespaces = ((.spec.apiServer.ucpauthz.exemptNamespaces // []) + ["kof"] | unique)
-                  | .spec.apiServer.ucpauthz.exemptUsers = ((.spec.apiServer.ucpauthz.exemptUsers // []) + [strenv(NS_SA)] | unique)
-                ' "${cfg}"
-                "$REPO/artifacts/bin/mkectl-v4.2.0" apply -f "${cfg}" --skip-helm-extensions-check --skip-cni-check --lease-adopt-stale >/dev/null 2>&1 || true
-            fi
-        fi
-    fi
-    rm -f "${cfg}"
-}
+echo "  Exempting kof from MKE ucpauthz admission policy..."
+kubectl patch mkeconfig mke -n mke --type=merge \
+    -p '{"spec":{"apiServer":{"ucpauthz":{"exemptNamespaces":["kof"],"exemptUsers":["system:serviceaccount:kof:opentelemetry-operator"]}}}}' >/dev/null 2>&1 || true
 
-exempt_ucpauthz
+# Select pre-rendered values file
+VALUES_FILE="${KOF_DIR}/values-${KOF_PROFILE}.yaml"
+if [[ ! -f "$VALUES_FILE" ]]; then
+    VALUES_FILE="${KOF_DIR}/values-lean.yaml"
+fi
 
-# Build values overlay
-WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/kof-XXXX")"
-trap 'rm -rf "${WORKDIR}"' EXIT
-
-python3 "${KOF_DIR}/generate_kof_values.py" \
-    --sc "${SC}" \
-    --kcm-ns "${KOF_KCM_NAMESPACE}" \
-    --profile "${KOF_PROFILE}" \
-    --storage-size "${KOF_STORAGE_SIZE}" \
-    --kof-dir "${KOF_DIR}" \
-    --output-dir "${WORKDIR}"
-
-cd "${WORKDIR}"
-
-echo "  Installing KOF umbrella chart via Helm..."
+# Install official Mirantis KOF Umbrella Chart
+echo "  Installing KOF umbrella chart via Helm ($(basename "$VALUES_FILE"))..."
 helm upgrade -i --reset-values \
     --create-namespace -n kof kof \
     "oci://${KOF_REGISTRY}/charts/kof" \
     --version "${KOF_VERSION}" \
-    -f global-components.yaml \
-    -f profile.yaml \
-    -f runtime.yaml
-
-cd "${REPO}"
+    -f "${VALUES_FILE}" \
+    --set "kof-mothership.values.global.storageClass=${SC}" \
+    --set "kof-storage.values.global.storageClass=${SC}"
 
 # Wait for Grafana CRDs and apply Grafana instance
 echo "  Applying Grafana instance CR..."
@@ -127,23 +92,10 @@ kubectl apply -f "${KOF_DIR}/mke-prometheus-datasource.yaml" -n kof
 # Prune non-applicable dashboards in lean mode
 if [[ "${KOF_PROFILE}" == "lean" ]]; then
     echo "  Pruning non-applicable dashboards for lean profile..."
-    folders="Istio,Opencost,Victoria Traces"
-    names="kps-nodes-aix,kps-nodes-darwin"
-    to_delete="$(kubectl get grafanadashboard -n kof -o json 2>/dev/null \
-        | FOLDERS="${folders}" NAMES="${names}" jq -r '
-            ($ENV.FOLDERS | split(",") | map(select(length > 0))) as $folders
-          | ($ENV.NAMES   | split(",") | map(select(length > 0))) as $names
-          | .items[]?
-          | (.spec.folder // "") as $f
-          | .metadata.name as $n
-          | select(($folders | index($f)) != null or ($names | index($n)) != null)
-          | $n' || true)"
-
-    if [[ -n "${to_delete}" ]]; then
-        while IFS= read -r d; do
-            [[ -n "${d}" ]] && kubectl delete grafanadashboard -n kof "${d}" --ignore-not-found >/dev/null 2>&1 || true
-        done <<< "${to_delete}"
-    fi
+    kubectl get grafanadashboard -n kof -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.folder}{"\n"}{end}' 2>/dev/null \
+      | grep -E "Istio|Opencost|Victoria Traces|kps-nodes-aix|kps-nodes-darwin" \
+      | awk '{print $1}' \
+      | xargs -r kubectl delete grafanadashboard -n kof >/dev/null 2>&1 || true
 fi
 
 # Configure Gateway HTTPRoutes & Dex OAuth

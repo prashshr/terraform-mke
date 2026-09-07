@@ -1,0 +1,1763 @@
+cert-manager:
+  cluster-issuer:
+    provider: self-signed
+cert-manager-istio-csr:
+  image:
+    repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+cert-manager-service-template:
+  repo:
+    spec:
+      type: oci
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+  skipVerifyJob: true
+envoy-gateway:
+  values:
+    config:
+      envoyGateway:
+        envoyProxy:
+          provider:
+            kubernetes:
+              envoyDeployment:
+                container:
+                  image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+            type: Kubernetes
+envoy-gateway-service-template:
+  repo:
+    spec:
+      type: oci
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+  skipVerifyJob: true
+external-dns:
+  image:
+    repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+global:
+  helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+  helmRepo:
+    kofManaged:
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    namespace: k0rdent
+  hub: registry.mirantis.com/k0rdent-enterprise/istio
+  image:
+    registry: registry.mirantis.com/k0rdent-enterprise
+  imageRegistry: registry.mirantis.com/k0rdent-enterprise
+  registry: registry.mirantis.com/k0rdent-enterprise
+ingress-nginx-service-template:
+  repo:
+    spec:
+      type: oci
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+  skipVerifyJob: true
+istio:
+  repo:
+    spec:
+      type: oci
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+k0rdent-istio:
+  repo:
+    spec:
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+kcm:
+  kof:
+    acl:
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+    operator:
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+kof-child:
+  enabled: false
+  values:
+    cert-manager:
+      cluster-issuer:
+        provider: self-signed
+    cert-manager-istio-csr:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+    cert-manager-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    collectors:
+      cert-manager:
+        cluster-issuer:
+          provider: self-signed
+      cert-manager-istio-csr:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+      cert-manager-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      envoy-gateway:
+        values:
+          config:
+            envoyGateway:
+              envoyProxy:
+                provider:
+                  kubernetes:
+                    envoyDeployment:
+                      container:
+                        image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                  type: Kubernetes
+      envoy-gateway-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      external-dns:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+      global:
+        helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        helmRepo:
+          kofManaged:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        hub: registry.mirantis.com/k0rdent-enterprise/istio
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+        imageRegistry: registry.mirantis.com/k0rdent-enterprise
+        registry: registry.mirantis.com/k0rdent-enterprise
+      ingress-nginx-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      istio:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      k0rdent-istio:
+        repo:
+          spec:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      kcm:
+        kof:
+          acl:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          operator:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opencost:
+        opencost:
+          exporter:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          ui:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opentelemetry-kube-stack:
+        collectors:
+          daemon:
+            image:
+              repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+          target-allocator:
+            targetAllocator:
+              image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+        kube-state-metrics:
+          containers:
+          - env:
+            - name: HEALTH_PORT
+              value: '8088'
+            - name: LABEL
+              value: kube-state-metrics/custom-resource
+            - name: FOLDER
+              value: /tmp
+            - name: RESOURCE
+              value: configmap
+            - name: NAMESPACE
+              value: kof
+            - name: SCRIPT
+              value: /script/compile.sh
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: crd-sidecar
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+            - mountPath: /script
+              name: compile-script
+          initContainers:
+          - command:
+            - /bin/sh
+            - -c
+            - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+              spec:\n  resources: []\nEOF\n"
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: init-crd-config
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+      opentelemetry-operator:
+        kubeRBACProxy:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+        manager:
+          collectorImage:
+            repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+      storage:
+        cert-manager:
+          cluster-issuer:
+            name: selfsigned
+            provider: self-signed
+        gateway:
+          annotations:
+            cert-manager.io/cluster-issuer: selfsigned
+      victoria-metrics-operator:
+        repo:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      vlogxy:
+        config-reloader:
+          image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+    envoy-gateway:
+      values:
+        config:
+          envoyGateway:
+            envoyProxy:
+              provider:
+                kubernetes:
+                  envoyDeployment:
+                    container:
+                      image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                type: Kubernetes
+    envoy-gateway-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    external-dns:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+    global:
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+    ingress-nginx-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    istio:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    k0rdent-istio:
+      repo:
+        spec:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    kcm:
+      kof:
+        acl:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        operator:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opencost:
+      opencost:
+        exporter:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        ui:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opentelemetry-kube-stack:
+      collectors:
+        daemon:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+        target-allocator:
+          targetAllocator:
+            image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+      kube-state-metrics:
+        containers:
+        - env:
+          - name: HEALTH_PORT
+            value: '8088'
+          - name: LABEL
+            value: kube-state-metrics/custom-resource
+          - name: FOLDER
+            value: /tmp
+          - name: RESOURCE
+            value: configmap
+          - name: NAMESPACE
+            value: kof
+          - name: SCRIPT
+            value: /script/compile.sh
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: crd-sidecar
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+          - mountPath: /script
+            name: compile-script
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+            spec:\n  resources: []\nEOF\n"
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: init-crd-config
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+    opentelemetry-operator:
+      kubeRBACProxy:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+      manager:
+        collectorImage:
+          repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    operators:
+      cert-manager:
+        cluster-issuer:
+          provider: self-signed
+      cert-manager-istio-csr:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+      cert-manager-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      envoy-gateway:
+        values:
+          config:
+            envoyGateway:
+              envoyProxy:
+                provider:
+                  kubernetes:
+                    envoyDeployment:
+                      container:
+                        image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                  type: Kubernetes
+      envoy-gateway-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      external-dns:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+      global:
+        helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        helmRepo:
+          kofManaged:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        hub: registry.mirantis.com/k0rdent-enterprise/istio
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+        imageRegistry: registry.mirantis.com/k0rdent-enterprise
+        registry: registry.mirantis.com/k0rdent-enterprise
+      ingress-nginx-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      istio:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      k0rdent-istio:
+        repo:
+          spec:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      kcm:
+        kof:
+          acl:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          operator:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opencost:
+        opencost:
+          exporter:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          ui:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opentelemetry-kube-stack:
+        collectors:
+          daemon:
+            image:
+              repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+          target-allocator:
+            targetAllocator:
+              image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+        kube-state-metrics:
+          containers:
+          - env:
+            - name: HEALTH_PORT
+              value: '8088'
+            - name: LABEL
+              value: kube-state-metrics/custom-resource
+            - name: FOLDER
+              value: /tmp
+            - name: RESOURCE
+              value: configmap
+            - name: NAMESPACE
+              value: kof
+            - name: SCRIPT
+              value: /script/compile.sh
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: crd-sidecar
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+            - mountPath: /script
+              name: compile-script
+          initContainers:
+          - command:
+            - /bin/sh
+            - -c
+            - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+              spec:\n  resources: []\nEOF\n"
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: init-crd-config
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+      opentelemetry-operator:
+        kubeRBACProxy:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+        manager:
+          collectorImage:
+            repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+      storage:
+        cert-manager:
+          cluster-issuer:
+            name: selfsigned
+            provider: self-signed
+        gateway:
+          annotations:
+            cert-manager.io/cluster-issuer: selfsigned
+      victoria-metrics-operator:
+        repo:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      vlogxy:
+        config-reloader:
+          image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+    storage:
+      cert-manager:
+        cluster-issuer:
+          name: selfsigned
+          provider: self-signed
+      gateway:
+        annotations:
+          cert-manager.io/cluster-issuer: selfsigned
+    victoria-metrics-operator:
+      repo:
+        type: oci
+        url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    vlogxy:
+      config-reloader:
+        image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+kof-collectors:
+  enabled: true
+  values:
+    cert-manager:
+      cluster-issuer:
+        provider: self-signed
+    cert-manager-istio-csr:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+    cert-manager-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    envoy-gateway:
+      values:
+        config:
+          envoyGateway:
+            envoyProxy:
+              provider:
+                kubernetes:
+                  envoyDeployment:
+                    container:
+                      image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                type: Kubernetes
+    envoy-gateway-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    external-dns:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+    global:
+      clusterNamespace: k0rdent
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+    ingress-nginx-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    istio:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    k0rdent-istio:
+      repo:
+        spec:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    kcm:
+      kof:
+        acl:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        operator:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+      monitoring: true
+      namespace: k0rdent
+    opencost:
+      enabled: true
+      opencost:
+        exporter:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        ui:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opentelemetry-kube-stack:
+      clusterName: mothership
+      collectors:
+        daemon:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+        target-allocator:
+          targetAllocator:
+            image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+      coreDns:
+        enabled: false
+      defaultCRConfig:
+        config:
+          exporters:
+            prometheusremotewrite:
+              external_labels:
+                cluster: mothership
+                clusterNamespace: k0rdent
+          processors:
+            resource/k8sclustername:
+              attributes:
+              - action: insert
+                key: k8s.cluster.name
+                value: mothership
+              - action: insert
+                key: k8s.cluster.namespace
+                value: k0rdent
+      kube-state-metrics:
+        containers:
+        - env:
+          - name: HEALTH_PORT
+            value: '8088'
+          - name: LABEL
+            value: kube-state-metrics/custom-resource
+          - name: FOLDER
+            value: /tmp
+          - name: RESOURCE
+            value: configmap
+          - name: NAMESPACE
+            value: kof
+          - name: SCRIPT
+            value: /script/compile.sh
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: crd-sidecar
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+          - mountPath: /script
+            name: compile-script
+        extraArgs:
+        - --custom-resource-state-config-file=/etc/config/crd-metrics-config.yaml
+        - --custom-resource-state-only
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+            spec:\n  resources: []\nEOF\n"
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: init-crd-config
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+      kubeApiServer:
+        enabled: false
+      kubeProxy:
+        enabled: false
+      nodeExporter:
+        enabled: false
+      prometheus-node-exporter:
+        hostNetwork: false
+    opentelemetry-operator:
+      kubeRBACProxy:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+      manager:
+        collectorImage:
+          repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    storage:
+      cert-manager:
+        cluster-issuer:
+          name: selfsigned
+          provider: self-signed
+      gateway:
+        annotations:
+          cert-manager.io/cluster-issuer: selfsigned
+    victoria-metrics-operator:
+      repo:
+        type: oci
+        url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    vlogxy:
+      config-reloader:
+        image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+kof-mothership:
+  values:
+    cert-manager:
+      cluster-issuer:
+        provider: self-signed
+    cert-manager-istio-csr:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+    cert-manager-service-template:
+      namespace: k0rdent
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    customRules:
+      KubeNodeNotReady:
+        for: 5m
+        severity: critical
+      KubeNodeUnreachable:
+        for: 5m
+        severity: critical
+      Watchdog:
+        severity: informational
+    envoy-gateway:
+      values:
+        config:
+          envoyGateway:
+            envoyProxy:
+              provider:
+                kubernetes:
+                  envoyDeployment:
+                    container:
+                      image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                type: Kubernetes
+    envoy-gateway-service-template:
+      namespace: k0rdent
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    external-dns:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+    global:
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+      storageClass: nfs-storage
+    grafana:
+      enabled: true
+    ingress-nginx-service-template:
+      namespace: k0rdent
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    istio:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    k0rdent-istio:
+      repo:
+        spec:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    kcm:
+      kof:
+        acl:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        operator:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+      namespace: k0rdent
+    opencost:
+      opencost:
+        exporter:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        ui:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opentelemetry-kube-stack:
+      collectors:
+        daemon:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+        target-allocator:
+          targetAllocator:
+            image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+      kube-state-metrics:
+        containers:
+        - env:
+          - name: HEALTH_PORT
+            value: '8088'
+          - name: LABEL
+            value: kube-state-metrics/custom-resource
+          - name: FOLDER
+            value: /tmp
+          - name: RESOURCE
+            value: configmap
+          - name: NAMESPACE
+            value: kof
+          - name: SCRIPT
+            value: /script/compile.sh
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: crd-sidecar
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+          - mountPath: /script
+            name: compile-script
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+            spec:\n  resources: []\nEOF\n"
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: init-crd-config
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+    opentelemetry-operator:
+      kubeRBACProxy:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+      manager:
+        collectorImage:
+          repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    storage:
+      cert-manager:
+        cluster-issuer:
+          name: selfsigned
+          provider: self-signed
+      gateway:
+        annotations:
+          cert-manager.io/cluster-issuer: selfsigned
+    victoria-metrics-operator:
+      repo:
+        type: oci
+        url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    vlogxy:
+      config-reloader:
+        image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+kof-operators:
+  values:
+    cert-manager:
+      cluster-issuer:
+        provider: self-signed
+    cert-manager-istio-csr:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+    cert-manager-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    envoy-gateway:
+      values:
+        config:
+          envoyGateway:
+            envoyProxy:
+              provider:
+                kubernetes:
+                  envoyDeployment:
+                    container:
+                      image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                type: Kubernetes
+    envoy-gateway-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    external-dns:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+    global:
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+    grafana-operator:
+      enabled: true
+    ingress-nginx-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    istio:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    k0rdent-istio:
+      repo:
+        spec:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    kcm:
+      kof:
+        acl:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        operator:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opencost:
+      opencost:
+        exporter:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        ui:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opentelemetry-kube-stack:
+      collectors:
+        daemon:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+        target-allocator:
+          targetAllocator:
+            image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+      kube-state-metrics:
+        containers:
+        - env:
+          - name: HEALTH_PORT
+            value: '8088'
+          - name: LABEL
+            value: kube-state-metrics/custom-resource
+          - name: FOLDER
+            value: /tmp
+          - name: RESOURCE
+            value: configmap
+          - name: NAMESPACE
+            value: kof
+          - name: SCRIPT
+            value: /script/compile.sh
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: crd-sidecar
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+          - mountPath: /script
+            name: compile-script
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+            spec:\n  resources: []\nEOF\n"
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: init-crd-config
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+    opentelemetry-operator:
+      kubeRBACProxy:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+      manager:
+        collectorImage:
+          repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    storage:
+      cert-manager:
+        cluster-issuer:
+          name: selfsigned
+          provider: self-signed
+      gateway:
+        annotations:
+          cert-manager.io/cluster-issuer: selfsigned
+    victoria-metrics-operator:
+      repo:
+        type: oci
+        url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    vlogxy:
+      config-reloader:
+        image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+kof-regional:
+  enabled: false
+  values:
+    cert-manager:
+      cluster-issuer:
+        provider: self-signed
+    cert-manager-istio-csr:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+    cert-manager-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    collectors:
+      cert-manager:
+        cluster-issuer:
+          provider: self-signed
+      cert-manager-istio-csr:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+      cert-manager-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      envoy-gateway:
+        values:
+          config:
+            envoyGateway:
+              envoyProxy:
+                provider:
+                  kubernetes:
+                    envoyDeployment:
+                      container:
+                        image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                  type: Kubernetes
+      envoy-gateway-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      external-dns:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+      global:
+        helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        helmRepo:
+          kofManaged:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        hub: registry.mirantis.com/k0rdent-enterprise/istio
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+        imageRegistry: registry.mirantis.com/k0rdent-enterprise
+        registry: registry.mirantis.com/k0rdent-enterprise
+      ingress-nginx-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      istio:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      k0rdent-istio:
+        repo:
+          spec:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      kcm:
+        kof:
+          acl:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          operator:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opencost:
+        opencost:
+          exporter:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          ui:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opentelemetry-kube-stack:
+        collectors:
+          daemon:
+            image:
+              repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+          target-allocator:
+            targetAllocator:
+              image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+        kube-state-metrics:
+          containers:
+          - env:
+            - name: HEALTH_PORT
+              value: '8088'
+            - name: LABEL
+              value: kube-state-metrics/custom-resource
+            - name: FOLDER
+              value: /tmp
+            - name: RESOURCE
+              value: configmap
+            - name: NAMESPACE
+              value: kof
+            - name: SCRIPT
+              value: /script/compile.sh
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: crd-sidecar
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+            - mountPath: /script
+              name: compile-script
+          initContainers:
+          - command:
+            - /bin/sh
+            - -c
+            - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+              spec:\n  resources: []\nEOF\n"
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: init-crd-config
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+      opentelemetry-operator:
+        kubeRBACProxy:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+        manager:
+          collectorImage:
+            repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+      storage:
+        cert-manager:
+          cluster-issuer:
+            name: selfsigned
+            provider: self-signed
+        gateway:
+          annotations:
+            cert-manager.io/cluster-issuer: selfsigned
+      victoria-metrics-operator:
+        repo:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      vlogxy:
+        config-reloader:
+          image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+    envoy-gateway:
+      values:
+        config:
+          envoyGateway:
+            envoyProxy:
+              provider:
+                kubernetes:
+                  envoyDeployment:
+                    container:
+                      image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                type: Kubernetes
+    envoy-gateway-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    external-dns:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+    global:
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+    ingress-nginx-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    istio:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    k0rdent-istio:
+      repo:
+        spec:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    kcm:
+      kof:
+        acl:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        operator:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opencost:
+      opencost:
+        exporter:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        ui:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opentelemetry-kube-stack:
+      collectors:
+        daemon:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+        target-allocator:
+          targetAllocator:
+            image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+      kube-state-metrics:
+        containers:
+        - env:
+          - name: HEALTH_PORT
+            value: '8088'
+          - name: LABEL
+            value: kube-state-metrics/custom-resource
+          - name: FOLDER
+            value: /tmp
+          - name: RESOURCE
+            value: configmap
+          - name: NAMESPACE
+            value: kof
+          - name: SCRIPT
+            value: /script/compile.sh
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: crd-sidecar
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+          - mountPath: /script
+            name: compile-script
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+            spec:\n  resources: []\nEOF\n"
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: init-crd-config
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+    opentelemetry-operator:
+      kubeRBACProxy:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+      manager:
+        collectorImage:
+          repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    operators:
+      cert-manager:
+        cluster-issuer:
+          provider: self-signed
+      cert-manager-istio-csr:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+      cert-manager-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      envoy-gateway:
+        values:
+          config:
+            envoyGateway:
+              envoyProxy:
+                provider:
+                  kubernetes:
+                    envoyDeployment:
+                      container:
+                        image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                  type: Kubernetes
+      envoy-gateway-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      external-dns:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+      global:
+        helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        helmRepo:
+          kofManaged:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        hub: registry.mirantis.com/k0rdent-enterprise/istio
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+        imageRegistry: registry.mirantis.com/k0rdent-enterprise
+        registry: registry.mirantis.com/k0rdent-enterprise
+      ingress-nginx-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      istio:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      k0rdent-istio:
+        repo:
+          spec:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      kcm:
+        kof:
+          acl:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          operator:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opencost:
+        opencost:
+          exporter:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          ui:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opentelemetry-kube-stack:
+        collectors:
+          daemon:
+            image:
+              repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+          target-allocator:
+            targetAllocator:
+              image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+        kube-state-metrics:
+          containers:
+          - env:
+            - name: HEALTH_PORT
+              value: '8088'
+            - name: LABEL
+              value: kube-state-metrics/custom-resource
+            - name: FOLDER
+              value: /tmp
+            - name: RESOURCE
+              value: configmap
+            - name: NAMESPACE
+              value: kof
+            - name: SCRIPT
+              value: /script/compile.sh
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: crd-sidecar
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+            - mountPath: /script
+              name: compile-script
+          initContainers:
+          - command:
+            - /bin/sh
+            - -c
+            - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+              spec:\n  resources: []\nEOF\n"
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: init-crd-config
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+      opentelemetry-operator:
+        kubeRBACProxy:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+        manager:
+          collectorImage:
+            repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+      storage:
+        cert-manager:
+          cluster-issuer:
+            name: selfsigned
+            provider: self-signed
+        gateway:
+          annotations:
+            cert-manager.io/cluster-issuer: selfsigned
+      victoria-metrics-operator:
+        repo:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      vlogxy:
+        config-reloader:
+          image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+    storage:
+      cert-manager:
+        cluster-issuer:
+          provider: self-signed
+      cert-manager-istio-csr:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+      cert-manager-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      envoy-gateway:
+        values:
+          config:
+            envoyGateway:
+              envoyProxy:
+                provider:
+                  kubernetes:
+                    envoyDeployment:
+                      container:
+                        image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                  type: Kubernetes
+      envoy-gateway-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      external-dns:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+      global:
+        helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        helmRepo:
+          kofManaged:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        hub: registry.mirantis.com/k0rdent-enterprise/istio
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+        imageRegistry: registry.mirantis.com/k0rdent-enterprise
+        registry: registry.mirantis.com/k0rdent-enterprise
+      ingress-nginx-service-template:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+        skipVerifyJob: true
+      istio:
+        repo:
+          spec:
+            type: oci
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      k0rdent-istio:
+        repo:
+          spec:
+            url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      kcm:
+        kof:
+          acl:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          operator:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opencost:
+        opencost:
+          exporter:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+          ui:
+            image:
+              registry: registry.mirantis.com/k0rdent-enterprise
+      opentelemetry-kube-stack:
+        collectors:
+          daemon:
+            image:
+              repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+          target-allocator:
+            targetAllocator:
+              image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+        kube-state-metrics:
+          containers:
+          - env:
+            - name: HEALTH_PORT
+              value: '8088'
+            - name: LABEL
+              value: kube-state-metrics/custom-resource
+            - name: FOLDER
+              value: /tmp
+            - name: RESOURCE
+              value: configmap
+            - name: NAMESPACE
+              value: kof
+            - name: SCRIPT
+              value: /script/compile.sh
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: crd-sidecar
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+            - mountPath: /script
+              name: compile-script
+          initContainers:
+          - command:
+            - /bin/sh
+            - -c
+            - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+              spec:\n  resources: []\nEOF\n"
+            image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+            name: init-crd-config
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config-volume
+      opentelemetry-operator:
+        kubeRBACProxy:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+        manager:
+          collectorImage:
+            repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+      storage:
+        cert-manager:
+          cluster-issuer:
+            name: selfsigned
+            provider: self-signed
+        gateway:
+          annotations:
+            cert-manager.io/cluster-issuer: selfsigned
+      victoria-metrics-operator:
+        repo:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      vlogxy:
+        config-reloader:
+          image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+        image:
+          registry: registry.mirantis.com/k0rdent-enterprise
+    victoria-metrics-operator:
+      repo:
+        type: oci
+        url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    vlogxy:
+      config-reloader:
+        image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+kof-storage:
+  enabled: true
+  values:
+    cert-manager:
+      cluster-issuer:
+        provider: self-signed
+    cert-manager-istio-csr:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/jetstack/cert-manager-istio-csr
+    cert-manager-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    envoy-gateway:
+      values:
+        config:
+          envoyGateway:
+            envoyProxy:
+              provider:
+                kubernetes:
+                  envoyDeployment:
+                    container:
+                      image: registry.mirantis.com/k0rdent-enterprise/envoyproxy/envoy:distroless-v1.37.1
+                type: Kubernetes
+    envoy-gateway-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    external-dns:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/external-dns/external-dns
+    global:
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+      storageClass: nfs-storage
+    ingress-nginx-service-template:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      skipVerifyJob: true
+    istio:
+      repo:
+        spec:
+          type: oci
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    k0rdent-istio:
+      repo:
+        spec:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    kcm:
+      kof:
+        acl:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        operator:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opencost:
+      opencost:
+        exporter:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+        ui:
+          image:
+            registry: registry.mirantis.com/k0rdent-enterprise
+    opentelemetry-kube-stack:
+      collectors:
+        daemon:
+          image:
+            repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+        target-allocator:
+          targetAllocator:
+            image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+      kube-state-metrics:
+        containers:
+        - env:
+          - name: HEALTH_PORT
+            value: '8088'
+          - name: LABEL
+            value: kube-state-metrics/custom-resource
+          - name: FOLDER
+            value: /tmp
+          - name: RESOURCE
+            value: configmap
+          - name: NAMESPACE
+            value: kof
+          - name: SCRIPT
+            value: /script/compile.sh
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: crd-sidecar
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+          - mountPath: /script
+            name: compile-script
+        initContainers:
+        - command:
+          - /bin/sh
+          - -c
+          - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+            spec:\n  resources: []\nEOF\n"
+          image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+          name: init-crd-config
+          volumeMounts:
+          - mountPath: /etc/config
+            name: config-volume
+    opentelemetry-operator:
+      kubeRBACProxy:
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+      manager:
+        collectorImage:
+          repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+        image:
+          repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    storage:
+      cert-manager:
+        cluster-issuer:
+          name: selfsigned
+          provider: self-signed
+      gateway:
+        annotations:
+          cert-manager.io/cluster-issuer: selfsigned
+    victoria-metrics-operator:
+      repo:
+        type: oci
+        url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    victoria-traces-cluster:
+      enabled: true
+    vlogxy:
+      config-reloader:
+        image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+opencost:
+  opencost:
+    exporter:
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+    ui:
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+opentelemetry-kube-stack:
+  collectors:
+    daemon:
+      image:
+        repository: registry.mirantis.com/k0rdent-enterprise/kof/kof-opentelemetry-collector-contrib
+    target-allocator:
+      targetAllocator:
+        image: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/target-allocator:v0.143.0
+  kube-state-metrics:
+    containers:
+    - env:
+      - name: HEALTH_PORT
+        value: '8088'
+      - name: LABEL
+        value: kube-state-metrics/custom-resource
+      - name: FOLDER
+        value: /tmp
+      - name: RESOURCE
+        value: configmap
+      - name: NAMESPACE
+        value: kof
+      - name: SCRIPT
+        value: /script/compile.sh
+      image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+      name: crd-sidecar
+      volumeMounts:
+      - mountPath: /etc/config
+        name: config-volume
+      - mountPath: /script
+        name: compile-script
+    initContainers:
+    - command:
+      - /bin/sh
+      - -c
+      - "cat << EOF > \"/etc/config/crd-metrics-config.yaml\"\nkind: CustomResourceStateMetrics\n\
+        spec:\n  resources: []\nEOF\n"
+      image: registry.mirantis.com/k0rdent-enterprise/kiwigrid/k8s-sidecar:2.1.4
+      name: init-crd-config
+      volumeMounts:
+      - mountPath: /etc/config
+        name: config-volume
+opentelemetry-operator:
+  kubeRBACProxy:
+    image:
+      repository: registry.mirantis.com/k0rdent-enterprise/brancz/kube-rbac-proxy
+  manager:
+    collectorImage:
+      repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
+    image:
+      repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+storage:
+  cert-manager:
+    cluster-issuer:
+      name: selfsigned
+      provider: self-signed
+  gateway:
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned
+victoria-metrics-operator:
+  repo:
+    type: oci
+    url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+  values:
+    global:
+      helmChartsRepo: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      helmRepo:
+        kofManaged:
+          url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+      hub: registry.mirantis.com/k0rdent-enterprise/istio
+      image:
+        registry: registry.mirantis.com/k0rdent-enterprise
+      imageRegistry: registry.mirantis.com/k0rdent-enterprise
+      registry: registry.mirantis.com/k0rdent-enterprise
+    repo:
+      type: oci
+      url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+vlogxy:
+  config-reloader:
+    image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
+  image:
+    registry: registry.mirantis.com/k0rdent-enterprise
