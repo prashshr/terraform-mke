@@ -94,79 +94,15 @@ exempt_ucpauthz
 WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/kof-XXXX")"
 trap 'rm -rf "${WORKDIR}"' EXIT
 
-cp "${KOF_DIR}/global-values.yaml" "${WORKDIR}/global-values.yaml"
-cp "${KOF_DIR}/profiles/${KOF_PROFILE}.yaml" "${WORKDIR}/profile.yaml"
+python3 "${KOF_DIR}/generate_kof_values.py" \
+    --sc "${SC}" \
+    --kcm-ns "${KOF_KCM_NAMESPACE}" \
+    --profile "${KOF_PROFILE}" \
+    --storage-size "${KOF_STORAGE_SIZE}" \
+    --kof-dir "${KOF_DIR}" \
+    --output-dir "${WORKDIR}"
+
 cd "${WORKDIR}"
-
-# Shrink storage sizes
-SIZE="${KOF_STORAGE_SIZE}" yq -i '
-    .victoriametrics.vmcluster.spec.vmstorage.storage.volumeClaimTemplate.spec.resources.requests.storage = strenv(SIZE)
-  | .victoria-logs-cluster.vlstorage.persistentVolume.size = strenv(SIZE)
-  | .victoria-traces-cluster.vtstorage.persistentVolume.size = strenv(SIZE)
-' global-values.yaml
-
-# Generate components file
-yq -n 'load("global-values.yaml") as $gv
-  | "operators mothership regional child storage collectors" / " "
-  | map({"key": ("kof-" + .), "value": {"values": $gv}})
-  | $gv * from_entries' > global-components.yaml
-
-yq -i 'load("global-values.yaml") as $gv
-  | .kof-regional.values.operators = $gv
-  | .kof-regional.values.storage *= $gv
-  | .kof-regional.values.collectors = $gv
-  | .kof-child.values.operators = $gv
-  | .kof-child.values.collectors = $gv
-  | .victoria-metrics-operator as $vmo
-  | .global as $g
-  | .victoria-metrics-operator.values = $vmo
-  | .victoria-metrics-operator.values.global = $g' global-components.yaml
-
-# Runtime substitutions
-SC_VAL="${SC}" KCM_NS="${KOF_KCM_NAMESPACE}" yq -n '
-    .global.helmRepo.namespace = strenv(KCM_NS)
-  | .["kof-mothership"].values.global.storageClass = strenv(SC_VAL)
-  | .["kof-mothership"].values.kcm.namespace = strenv(KCM_NS)
-  | .["kof-mothership"].values["cert-manager-service-template"].namespace = strenv(KCM_NS)
-  | .["kof-mothership"].values["ingress-nginx-service-template"].namespace = strenv(KCM_NS)
-  | .["kof-mothership"].values["envoy-gateway-service-template"].namespace = strenv(KCM_NS)
-  | .["kof-storage"].values.global.storageClass = strenv(SC_VAL)
-  | .["kof-collectors"].values.kcm.namespace = strenv(KCM_NS)
-  | .["kof-collectors"].values.global.clusterNamespace = strenv(KCM_NS)
-  | .["kof-collectors"].values["opentelemetry-kube-stack"].defaultCRConfig.config.processors["resource/k8sclustername"].attributes = [
-        {"action": "insert", "key": "k8s.cluster.name", "value": "mothership"},
-        {"action": "insert", "key": "k8s.cluster.namespace", "value": strenv(KCM_NS)}
-    ]
-  | .["kof-collectors"].values["opentelemetry-kube-stack"].defaultCRConfig.config.exporters.prometheusremotewrite.external_labels.cluster = "mothership"
-  | .["kof-collectors"].values["opentelemetry-kube-stack"].defaultCRConfig.config.exporters.prometheusremotewrite.external_labels.clusterNamespace = strenv(KCM_NS)
-' > runtime.yaml
-
-# Custom Alert Rules & Sensitivity
-yq -i '
-    .["kof-mothership"].values.customRules.KubeNodeNotReady.for = "5m"
-  | .["kof-mothership"].values.customRules.KubeNodeNotReady.severity = "critical"
-  | .["kof-mothership"].values.customRules.KubeNodeUnreachable.for = "5m"
-  | .["kof-mothership"].values.customRules.KubeNodeUnreachable.severity = "critical"
-  | .["kof-mothership"].values.customRules.Watchdog.severity = "informational"
-' runtime.yaml
-
-# Enable Grafana Operator
-yq -i '
-    .["kof-operators"].values["grafana-operator"].enabled = true
-  | .["kof-mothership"].values.grafana.enabled = true
-' runtime.yaml
-
-# Reuse MKE monitoring and deduplicate collectors
-yq -i '
-    .["kof-collectors"].values["opentelemetry-kube-stack"].nodeExporter.enabled = false
-  | .["kof-collectors"].values["opentelemetry-kube-stack"].kubeProxy.enabled = false
-  | .["kof-collectors"].values["opentelemetry-kube-stack"].coreDns.enabled = false
-  | .["kof-collectors"].values["opentelemetry-kube-stack"].kubeApiServer.enabled = false
-  | .["kof-collectors"].values["opentelemetry-kube-stack"]["kube-state-metrics"].extraArgs = [
-        "--custom-resource-state-config-file=/etc/config/crd-metrics-config.yaml",
-        "--custom-resource-state-only"
-    ]
-' runtime.yaml
 
 echo "  Installing KOF umbrella chart via Helm..."
 helm upgrade -i --reset-values \
