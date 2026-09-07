@@ -61,5 +61,14 @@ kubectl get grafanadashboard -n kof -o jsonpath='{range .items[*]}{.metadata.nam
   | awk '{print $1}' \
   | xargs -r kubectl delete grafanadashboard -n kof >/dev/null 2>&1 || true
 
+echo "=== 4. Waiting for grafana-admin-credentials secret ==="
+for i in {1..30}; do
+    if kubectl get secret -n kof grafana-admin-credentials >/dev/null 2>&1; then
+        echo "  Secret grafana-admin-credentials is ready."
+        break
+    fi
+    sleep 2
+done
+
 echo ""
 echo "=== Telemetry transforms, deduplication, and dashboard cleanup applied successfully! ==="

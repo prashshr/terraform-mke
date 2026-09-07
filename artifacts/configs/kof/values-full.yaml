@@ -724,6 +724,8 @@ kof-mothership:
       storageClass: nfs-storage
     grafana:
       enabled: true
+      security:
+        create_secret: true
     ingress-nginx-service-template:
       namespace: k0rdent
       repo:
