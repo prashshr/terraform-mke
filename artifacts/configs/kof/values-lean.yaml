@@ -807,6 +807,8 @@ kof-mothership:
           repository: registry.mirantis.com/k0rdent-enterprise/otel/opentelemetry-collector-contrib
         image:
           repository: registry.mirantis.com/k0rdent-enterprise/opentelemetry-operator/opentelemetry-operator
+    promxy:
+      replicaCount: 1
     storage:
       cert-manager:
         cluster-issuer:
@@ -819,6 +821,16 @@ kof-mothership:
       repo:
         type: oci
         url: oci://registry.mirantis.com/k0rdent-enterprise/charts
+    victoriametrics:
+      vmcluster:
+        spec:
+          replicationFactor: 1
+          vminsert:
+            replicaCount: 1
+          vmselect:
+            replicaCount: 1
+          vmstorage:
+            replicaCount: 1
     vlogxy:
       config-reloader:
         image: registry.mirantis.com/k0rdent-enterprise/jimmidyson/configmap-reload:v0.15.0
@@ -1661,6 +1673,13 @@ kof-storage:
       gateway:
         annotations:
           cert-manager.io/cluster-issuer: selfsigned
+    victoria-logs-cluster:
+      vlinsert:
+        replicaCount: 1
+      vlselect:
+        replicaCount: 1
+      vlstorage:
+        replicaCount: 1
     victoria-metrics-operator:
       repo:
         type: oci
