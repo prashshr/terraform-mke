@@ -23,6 +23,7 @@ spec:
   disableDefaultAdminSecret: true
   persistentVolumeClaim:
     spec:
+      storageClassName: nfs-storage
       accessModes:
         - ReadWriteOnce
       resources:
@@ -34,6 +35,13 @@ spec:
         spec:
           securityContext:
             fsGroup: 472
+          tolerations:
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/master
+              operator: Exists
+            - effect: NoSchedule
+              key: node-role.kubernetes.io/control-plane
+              operator: Exists
           volumes:
             - name: grafana-data
               persistentVolumeClaim:

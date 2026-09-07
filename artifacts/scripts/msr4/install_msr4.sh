@@ -572,7 +572,7 @@ else
   helm upgrade --install nfs-subdir-external-provisioner nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
     --set nfs.server="${NFS_NODE_INTERNAL_IP}" \
     --set nfs.path="${NFS_PATH}" \
-    --set storageClass.defaultClass=false \
+    --set storageClass.defaultClass=true \
     --set storageClass.name=nfs-storage \
     --set storageClass.reclaimPolicy=Retain \
     --set-string nodeSelector.msr4=true \
