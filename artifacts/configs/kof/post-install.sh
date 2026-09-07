@@ -1,19 +1,9 @@
 #!/usr/bin/env bash
-# post-install.sh — Configure telemetry transforms, deduplication, and dashboard pruning
+# post-install.sh — Configure telemetry transforms, deduplications, and dashboard pruning
 # Exactly aligned with macpromethe/mke4k-lab architecture
 set -euo pipefail
 
-KOF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KOF_DOM="${KOF_DOM:-kof-mke.samkhya.cloud}"
-
-echo ""
-echo "=== 1. Applying Grafana Instance & MKE Prometheus Datasource ==="
-kubectl wait --for=condition=Established crd/grafanas.grafana.integreatly.org --timeout=5m
-kubectl apply -f "${KOF_DIR}/grafana.yaml" -n kof
-kubectl wait --for=condition=Established crd/grafanadatasources.grafana.integreatly.org --timeout=5m
-kubectl apply -f "${KOF_DIR}/mke-prometheus-datasource.yaml" -n kof
-
-echo "=== 2. Applying Node-Label Transform & Pushgateway Dedup ==="
+echo "=== 1. Applying Node-Label Transform & Pushgateway Dedup ==="
 cr="kof-collectors-ta-daemon"
 ds="kof-collectors-ta-daemon-collector"
 stmt_node='set(datapoint.attributes["node"], "${env:OTEL_K8S_NODE_NAME}") where IsMatch(metric.name, "^(node_|machine_|container_|kubelet_)") and datapoint.attributes["node"] == nil'
@@ -50,7 +40,7 @@ if [[ -n "${cur_json}" && "${cur_json}" != "[]" ]]; then
     kubectl -n kof rollout restart ds/${ds} >/dev/null 2>&1 || true
 fi
 
-echo "=== 3. Applying Kubelet Deduplication ==="
+echo "=== 2. Applying Kubelet Deduplication ==="
 for dcr in kof-collectors-daemon kof-collectors-controller-k0s-daemon; do
     if kubectl get opentelemetrycollector "${dcr}" -n kof >/dev/null 2>&1; then
         pf="$(mktemp "${TMPDIR:-/tmp}/kof-nokubelet-XXXX.json")"
@@ -65,15 +55,11 @@ for dcr in kof-collectors-daemon kof-collectors-controller-k0s-daemon; do
     fi
 done
 
-echo "=== 4. Pruning Non-Applicable Dashboards ==="
+echo "=== 3. Pruning Non-Applicable Dashboards (Lean Mode) ==="
 kubectl get grafanadashboard -n kof -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.folder}{"\n"}{end}' 2>/dev/null \
   | grep -E "Istio|Opencost|Victoria Traces|kps-nodes-aix|kps-nodes-darwin" \
   | awk '{print $1}' \
   | xargs -r kubectl delete grafanadashboard -n kof >/dev/null 2>&1 || true
 
-echo "=== 5. Applying Gateway HTTPRoute ==="
-export KOF_DOM
-envsubst < "${KOF_DIR}/manifests/kof-routes.yaml" | kubectl apply -f -
-
 echo ""
-echo "=== Post-Install Complete! Grafana is live at https://${KOF_DOM} ==="
+echo "=== Telemetry transforms, deduplication, and dashboard cleanup applied successfully! ==="
