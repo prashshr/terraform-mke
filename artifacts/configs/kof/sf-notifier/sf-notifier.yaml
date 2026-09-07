@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sf-notifier
+  namespace: kof
+  labels:
+    app: sf-notifier
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sf-notifier
+  template:
+    metadata:
+      labels:
+        app: sf-notifier
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      containers:
+        - name: sf-notifier
+          # Image provided by Mirantis for Salesforce support case automation
+          image: registry.mirantis.com/k0rdent-enterprise/sf-notifier:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: http
+          envFrom:
+            - secretRef:
+                name: sf-notifier-credentials
+            - configMapRef:
+                name: sf-notifier-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sf-notifier
+  namespace: kof
+  labels:
+    app: sf-notifier
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http
+  selector:
+    app: sf-notifier

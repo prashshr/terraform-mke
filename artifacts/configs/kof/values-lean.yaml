@@ -824,6 +824,19 @@ kof-mothership:
         type: oci
         url: oci://registry.mirantis.com/k0rdent-enterprise/charts
     victoriametrics:
+      vmalert:
+        manager:
+          spec:
+            configRawYaml: "global:\n  resolve_timeout: 5m\nroute:\n  receiver: blackhole\n\
+              \  group_by: [alertname, promxyCluster, namespace]\n  group_wait: 30s\n\
+              \  group_interval: 5m\n  repeat_interval: 1h\n  routes:\n    - receiver:\
+              \ Salesforce\n      matchers:\n        - severity=~\"critical|warning|error\"\
+              \n      continue: false\n    - receiver: Salesforce\n      matchers:\n\
+              \        - alertname=\"Watchdog\"\n      continue: false\nreceivers:\n\
+              \  - name: blackhole\n  - name: Salesforce\n    webhook_configs:\n \
+              \     - send_resolved: true\n        http_config:\n          follow_redirects:\
+              \ true\n          enable_http2: true\n        url: \"http://sf-notifier.kof.svc:5000/hook\"\
+              \n        max_alerts: 0\n"
       vmcluster:
         spec:
           replicationFactor: 1
