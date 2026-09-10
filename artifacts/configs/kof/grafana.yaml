@@ -62,3 +62,12 @@ spec:
                       name: grafana-admin-credentials
                 - name: GF_INSTALL_PLUGINS
                   value: "victoriametrics-logs-datasource 0.21.0,victoriametrics-metrics-datasource 0.19.4"
+                # ── PROXY CONFIGURATION (OPTIONAL) ──────────────────────────────────
+                # If Grafana needs an egress proxy to download plugins/dashboards,
+                # uncomment the environment variables below:
+                # - name: HTTP_PROXY
+                #   value: "http://proxy.your-company.com:3128"
+                # - name: HTTPS_PROXY
+                #   value: "http://proxy.your-company.com:3128"
+                # - name: NO_PROXY
+                #   value: "localhost,127.0.0.1,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
