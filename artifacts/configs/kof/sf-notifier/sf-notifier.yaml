@@ -24,7 +24,6 @@ spec:
           operator: Exists
       containers:
         - name: sf-notifier
-          # Image provided by Mirantis for Salesforce support case automation
           image: registry.mirantis.com/k0rdent-enterprise/sf-notifier:latest
           imagePullPolicy: IfNotPresent
           ports:
@@ -33,8 +32,11 @@ spec:
           envFrom:
             - secretRef:
                 name: sf-notifier-credentials
-            - configMapRef:
-                name: sf-notifier-config
+          env:
+            - name: PORT
+              value: "5000"
+            - name: LOG_LEVEL
+              value: "INFO"
           resources:
             requests:
               cpu: 50m
