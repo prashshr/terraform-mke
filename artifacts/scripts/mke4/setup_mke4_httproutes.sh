@@ -29,7 +29,10 @@ KUBECONFIG="$KCFG" kubectl delete httproute ui-mke-dashboard-httproute dex-http-
 
 # 2. Configure KOF (Grafana) HTTPRoutes if enabled
 if [[ "${KOF_ENABLED:-true}" == "true" ]]; then
-    if [ -f "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" ]; then
+    if [ -f "${REPO_DIR}/artifacts/configs/kof/kof-routes.yaml" ]; then
+        echo "  Applying Gateway HTTPRoute for KOF (${KOF_DOM})..."
+        envsubst < "${REPO_DIR}/artifacts/configs/kof/kof-routes.yaml" | KUBECONFIG="$KCFG" kubectl apply -f -
+    elif [ -f "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" ]; then
         echo "  Applying Gateway HTTPRoute for KOF (${KOF_DOM})..."
         envsubst < "${REPO_DIR}/artifacts/configs/kof/manifests/kof-routes.yaml" | KUBECONFIG="$KCFG" kubectl apply -f -
     fi
