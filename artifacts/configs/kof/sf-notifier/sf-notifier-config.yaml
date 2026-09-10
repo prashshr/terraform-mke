@@ -4,17 +4,11 @@ metadata:
   name: sf-notifier-config
   namespace: kof
 data:
-  # [ENV CHECK]: Salesforce Authentication Endpoint (default: https://login.salesforce.com)
-  SF_AUTH_URL: "https://login.salesforce.com"
-
-  # [ENV CHECK]: Target Salesforce Environment ("production" or "sandbox")
-  SF_ENVIRONMENT: "production"
-
-  # [ENV CHECK]: Your Mirantis Salesforce Customer / Account ID
-  SF_CUSTOMER_ID: "0014W0000341gYFQAY"
-
   # [ENV CHECK]: Cluster Identifier matching your MKE/k0rdent cluster name
   SF_CLUSTER_ID: "mothership"
+
+  # [ENV CHECK]: Mirantis Customer / Account ID
+  SF_CUSTOMER_ID: "0014W0000341gYFQAY"
 
   # [ENV CHECK]: Webhook listening port (default: 5000)
   PORT: "5000"
