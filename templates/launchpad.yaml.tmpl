@@ -62,11 +62,17 @@ spec:
     version: ${msr_version}
 %{ if msr_ca_cert_pem != "" ~}
     caCertData: |-
-${indent(4, msr_ca_cert_pem)}
+%{ for line in split("\n", msr_ca_cert_pem) ~}
+      ${line}
+%{ endfor ~}
     certData: |-
-${indent(4, msr_cert_pem)}
+%{ for line in split("\n", msr_cert_pem) ~}
+      ${line}
+%{ endfor ~}
     keyData: |-
-${indent(4, msr_key_pem)}
+%{ for line in split("\n", msr_key_pem) ~}
+      ${line}
+%{ endfor ~}
 %{ endif ~}
     installFlags:
       #- --ucp-insecure-tls
