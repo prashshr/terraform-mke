@@ -26,9 +26,15 @@ if [[ -z "${MKE_VERSION:-}" ]]; then
 fi
 
 MSR_VERSION="${MSR_VERSION:-$MSR_VERSION}"
-# If MSR4_ENABLED in config but MSR_VERSION empty, use MSR4_VERSION
-if [[ -z "$MSR_VERSION" && "${MSR4_ENABLED:-false}" == "true" ]]; then
-    MSR_VERSION="$MSR4_VERSION"
+# Only use MSR_VERSION for MSR4 when MSR4_ENABLED=true; otherwise clear it to prevent accidental MSR4 install
+if [[ "${MSR4_ENABLED:-false}" == "true" ]]; then
+    # MSR4 explicitly enabled — use MSR4_VERSION if MSR_VERSION not set via CLI
+    if [[ -z "$MSR_VERSION" ]]; then
+        MSR_VERSION="$MSR4_VERSION"
+    fi
+else
+    # MSR4 not enabled — clear MSR_VERSION so NFS/MSR4 steps are skipped
+    MSR_VERSION=""
 fi
 
 # Logging
@@ -93,7 +99,10 @@ else
 fi
 
 # 7. Refresh kubeconfig (certs rotate on each apply, old kubeconfig has stale CA)
-MANAGER_IP=$(terraform -chdir="$REPO" output -json all_hosts 2>/dev/null | jq -r '.[0].public_ip')
+ALL_HOSTS=$(terraform -chdir="$REPO" output -json all_hosts 2>/dev/null)
+MANAGER_IP=$(echo "$ALL_HOSTS" | jq -r '.[0].public_ip')
+MANAGER_SSH_USER=$(echo "$ALL_HOSTS" | jq -r '.[0].ssh_user')
+MANAGER_SSH_KEY=$(echo "$ALL_HOSTS" | jq -r '.[0].ssh_key_path')
 if [[ "$CLUSTER_TYPE" == "mke4" && -f "$HOME/.mke/mke.kubeconf" ]]; then
     # MKE4: mkectl writes kubeconfig to ~/.mke/mke.kubeconf
     cp "$HOME/.mke/mke.kubeconf" "$REPO/artifacts/configs/kubeconfig.yaml"
@@ -101,9 +110,7 @@ if [[ "$CLUSTER_TYPE" == "mke4" && -f "$HOME/.mke/mke.kubeconf" ]]; then
     echo "Kubeconfig copied from ~/.mke/mke.kubeconf"
 else
     # MKE3 or fallback: SSH to manager
-    SSH_KEY=$(find "$REPO/artifacts/ssh" -name '*.pem' | head -1)
-    SSH_USER="ec2-user"
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$SSH_KEY" "${SSH_USER}@${MANAGER_IP}" \
+    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$MANAGER_SSH_KEY" "${MANAGER_SSH_USER}@${MANAGER_IP}" \
         "sudo cat /var/lib/k0s/pki/admin.conf" > "$REPO/artifacts/configs/kubeconfig.yaml"
     sed -i "s|server: .*|server: https://${MANAGER_IP}:6443|" "$REPO/artifacts/configs/kubeconfig.yaml"
     echo "Kubeconfig refreshed from manager ${MANAGER_IP}"
@@ -113,18 +120,17 @@ fi
 if [[ -n "$MSR_VERSION" ]]; then
     echo ""
     echo "=== Installing NFS client packages on all worker nodes ==="
-    SSH_KEY=$(find "$REPO/artifacts/ssh" -name '*.pem' | head -1)
-    SSH_USER="ec2-user"
-    ALL_HOSTS=$(terraform -chdir="$REPO" output -json all_hosts 2>/dev/null)
 
     for row in $(echo "$ALL_HOSTS" | jq -r '.[] | @base64'); do
         _jq() { echo "$row" | base64 -d | jq -r "$1"; }
         HOST_IP=$(_jq '.public_ip')
         HOST_NAME=$(_jq '.name')
-        ROLE=$(_jq '.role')
-        [[ "$ROLE" == "manager" ]] && continue
+        HOST_ROLE=$(_jq '.roles[0]')
+        HOST_SSH_USER=$(_jq '.ssh_user')
+        HOST_SSH_KEY=$(_jq '.ssh_key_path')
+        [[ "$HOST_ROLE" == "manager" ]] && continue
         echo "  Installing NFS on ${HOST_NAME} (${HOST_IP})..."
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$SSH_KEY" "${SSH_USER}@${HOST_IP}" \
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$HOST_SSH_KEY" "${HOST_SSH_USER}@${HOST_IP}" \
             'bash -s' < "$REPO/artifacts/scripts/common/nfs_setup.sh" -- "/msr4" client || \
             echo "  WARN: NFS install on ${HOST_NAME} had issues"
     done

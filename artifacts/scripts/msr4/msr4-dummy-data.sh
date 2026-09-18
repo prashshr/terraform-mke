@@ -135,25 +135,14 @@ api_post() {
     -H "Content-Type: application/json" "$@"
 }
 
-# Acquire a session cookie-based token via the Harbor login endpoint.
-# Harbor v2 uses /api/v2.0/users/current; we authenticate with basic auth on
-# each call, but a session cookie improves reliability for some setups.
-SESSION_COOKIE="$(mktemp)"
 login() {
   local http_code
-  http_code="$(curl -sS "${CURL_EXTRA[@]}" -c "${SESSION_COOKIE}" -o /dev/null -w '%{http_code}' \
-    -u "${MSR4_ADMIN_USERNAME}:${MSR4_ADMIN_PASSWORD}" \
-    "${API}/users/current")"
+  http_code="$(api_get -o /dev/null -w '%{http_code}' "${API}/users/current")"
   if [[ "${http_code}" != "200" ]]; then
     echo "ERROR: failed to authenticate to MSR4 (HTTP ${http_code})." >&2
     exit 1
   fi
   echo "Authenticated to MSR4 as ${MSR4_ADMIN_USERNAME}"
-}
-
-# Re-run curl with the session cookie for calls that need it.
-api_cookie() {
-  curl -sS "${CURL_EXTRA[@]}" -b "${SESSION_COOKIE}" "$@"
 }
 
 # Readable name pools (cycle through by index)
@@ -280,8 +269,6 @@ for (( p=1; p<=COUNT_PROJECT; p++ )); do
     push_dummy_image "${repo_target_project}" "${rname}" "${COUNT_TAGS_PER_PROJECT}" "${CURRENT_BASE_IMAGE}"
   done
 done
-
-rm -f "${SESSION_COOKIE}"
 
 echo
 echo "Done. Summary:"

@@ -428,7 +428,7 @@ locals {
 
   mke4_tls_common_name = local.mke4_tls_enabled ? coalesce(
     try(local.mke4_tls.common_name, null),
-    local.mke4_ui_domain
+    local.mke4_domain
   ) : null
 
   mke4_tls_dir       = local.mke4_tls_enabled ? "${local.artifacts_dir}/tlscerts/mke4/${local.mke4_tls_common_name}" : "${local.artifacts_dir}/tlscerts/mke4"

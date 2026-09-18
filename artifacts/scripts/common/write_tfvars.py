@@ -44,6 +44,16 @@ def parse_config(config_path):
     return config
 
 
+def _hcl_escape(val):
+    """Escape a string value for safe inclusion in HCL double-quoted literals."""
+    val = val.replace('\\', '\\\\')
+    val = val.replace('"', '\\"')
+    val = val.replace('\n', '\\n')
+    val = val.replace('\r', '\\r')
+    val = val.replace('\t', '\\t')
+    return val
+
+
 def to_tfval(val):
     """Convert a config value to HCL format."""
     if val.lower() in ('true', 'false'):
@@ -52,7 +62,7 @@ def to_tfval(val):
         return val
     if val.lower() == 'null' or val == '':
         return 'null'
-    return f'"{val}"'
+    return f'"{_hcl_escape(val)}"'
 
 
 def build_node_pools(pools_str):
@@ -93,6 +103,7 @@ def generate_tfvars(config):
         'MKE3_MCR_VERSION': 'MCR_VERSION',
         'MKE3_APP_DOMAIN': 'APP_DOMAIN_MKE3',
         'MKE4_APP_DOMAIN': 'APP_DOMAIN_MKE4',
+        'MKE4_UI_DOMAIN': 'APP_DOMAIN_MKE4_UI',
         'MSR2_VERSION': 'MSR_VERSION',
         'MSR2_ENABLED': 'ENABLE_MSR',
         'MSR2_APP_DOMAIN': 'APP_DOMAIN_MSR',
@@ -110,9 +121,10 @@ def generate_tfvars(config):
         'mke3_version', 'mke4_version', 'msr_version', 'mcr_version',
         'mke4_ui_backend_port', 'mke4_gateway_http_node_port', 'mke4_gateway_https_node_port',
         'aws_root_volume_size', 'root_domain',
-        'app_domain_mke3', 'app_domain_mke4', 'app_domain_ingress',
+        'app_domain_mke3', 'app_domain_mke4', 'app_domain_mke4_ui', 'app_domain_ingress',
         'app_domain_msr', 'app_domain_msr4', 'app_domain_kof', 'app_domain_k0rdent_ui',
         'enable_msr', 'airgap_enabled', 'nfs_enabled', 'kof_enabled', 'k0rdent_ui_enabled',
+        'expiry_days',
     ]
 
     for var in simple_vars:
@@ -145,16 +157,16 @@ def generate_tfvars(config):
 
         lines.append('aws_settings = {')
         lines.append('  enabled                 = true')
-        lines.append(f'  region                  = "{aws_region}"')
+        lines.append(f'  region                  = "{_hcl_escape(aws_region)}"')
         if aws_profile:
-            lines.append(f'  profile                 = "{aws_profile}"')
+            lines.append(f'  profile                 = "{_hcl_escape(aws_profile)}"')
         if aws_creds:
-            lines.append(f'  shared_credentials_file = "{aws_creds}"')
-        lines.append(f'  resource_prefix         = "{cluster_name}"')
-        lines.append(f'  cluster_name            = "{cluster_name}"')
+            lines.append(f'  shared_credentials_file = "{_hcl_escape(aws_creds)}"')
+        lines.append(f'  resource_prefix         = "{_hcl_escape(cluster_name)}"')
+        lines.append(f'  cluster_name            = "{_hcl_escape(cluster_name)}"')
         lines.append(f'  vpc_cidr                = "10.40.0.0/16"')
         lines.append(f'  availability_zones      = ["{aws_region}a", "{aws_region}b"]')
-        lines.append(f'  ssh_key_prefix          = "{cluster_name}"')
+        lines.append(f'  ssh_key_prefix          = "{_hcl_escape(cluster_name)}"')
         lines.append(f'  tags                    = {{}}')
         lines.append(f'  node_pools = {node_pools_hcl}')
         lines.append('}')
@@ -168,15 +180,15 @@ def generate_tfvars(config):
 
     lines.append('hetzner_settings = {')
     lines.append(f'  enabled          = {str(hz_enabled).lower()}')
-    lines.append(f'  location         = "{config.get("HETZNER_LOCATION", "fsn1")}"')
+    lines.append(f'  location         = "{_hcl_escape(config.get("HETZNER_LOCATION", "fsn1"))}"')
     lines.append(f'  create_network   = {hz_create_net}')
     lines.append(f'  network_cidr     = "{config.get("HETZNER_NETWORK_CIDR", "10.42.0.0/16")}"')
     lines.append(f'  subnet_cidr      = "{config.get("HETZNER_SUBNET_CIDR", "10.42.0.0/24")}"')
-    lines.append(f'  network_zone     = "{config.get("HETZNER_NETWORK_ZONE", "eu-central")}"')
-    lines.append(f'  cluster_name     = "{config.get("CLUSTER_NAME", "ps-mke")}"')
-    lines.append(f'  ssh_key_prefix   = "{config.get("CLUSTER_NAME", "ps-mke")}"')
+    lines.append(f'  network_zone     = "{_hcl_escape(config.get("HETZNER_NETWORK_ZONE", "eu-central"))}"')
+    lines.append(f'  cluster_name     = "{_hcl_escape(config.get("CLUSTER_NAME", "ps-mke"))}"')
+    lines.append(f'  ssh_key_prefix   = "{_hcl_escape(config.get("CLUSTER_NAME", "ps-mke"))}"')
     if hz_creds:
-        lines.append(f'  credentials_file = "{hz_creds}"')
+        lines.append(f'  credentials_file = "{_hcl_escape(hz_creds)}"')
     lines.append(f'  labels           = {{}}')
     lines.append(f'  node_pools = {hz_node_pools}')
     lines.append('}')
@@ -200,7 +212,7 @@ def generate_tfvars(config):
         lines.append(f'{var_name} = {{')
         lines.append(f'  enabled  = {"true" if enabled else "false"}')
         lines.append(f'  use_acme = {"true" if enabled else "false"}')
-        lines.append(f'  email    = "{email}"')
+        lines.append(f'  email    = "{_hcl_escape(email)}"')
         lines.append(f'}}')
     lines.append('')
 
@@ -209,8 +221,8 @@ def generate_tfvars(config):
     cf_token = config.get('CLOUDFLARE_API_TOKEN', '')
     lines.append('cloudflare_settings = {')
     lines.append(f'  enabled   = {"true" if cf_enabled else "false"}')
-    lines.append(f'  zone_name = "{config.get("CLOUDFLARE_ZONE_NAME", "")}"')
-    lines.append(f'  api_token = {"null" if not cf_token else f"\"{cf_token}\""}')
+    lines.append(f'  zone_name = "{_hcl_escape(config.get("CLOUDFLARE_ZONE_NAME", ""))}"')
+    lines.append(f'  api_token = {"null" if not cf_token else f"\"{_hcl_escape(cf_token)}\""}')
     lines.append('}')
     lines.append('')
 

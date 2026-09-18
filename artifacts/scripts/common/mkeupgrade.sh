@@ -74,8 +74,8 @@ phase_install_old() {
 
     echo "Installing cluster with MKE ${OLD_MKE_VERSION}..."
 
-    # Clear SSH known_hosts
-    rm -f "$HOME/.ssh/known_hosts"
+    # Bypass host-key checking via env var (not destructive to ~/.ssh/known_hosts)
+    export SSH_KNOWN_HOSTS=/dev/null
 
     # Terraform apply with OLD versions
     local TF_ARGS=(-auto-approve -var "cluster_type=$CLUSTER_TYPE")
@@ -87,8 +87,8 @@ phase_install_old() {
     terraform -chdir="$REPO" init -input=false
     terraform -chdir="$REPO" apply "${TF_ARGS[@]}"
 
-    # Clear known_hosts again
-    rm -f "$HOME/.ssh/known_hosts"
+    # Bypass host-key checking via env var
+    export SSH_KNOWN_HOSTS=/dev/null
 
     # Install MKE
     if [[ "$CLUSTER_TYPE" == "mke3" ]]; then
@@ -226,9 +226,10 @@ phase_upgrade_mcr() {
 
 _refresh_kubeconfig() {
     echo "Refreshing kubeconfig..."
-    local MANAGER_IP=$(terraform -chdir="$REPO" output -json all_hosts 2>/dev/null | jq -r '.[0].public_ip')
-    local SSH_KEY=$(find "$REPO/artifacts/ssh" -name '*.pem' | head -1)
-    local SSH_USER="ec2-user"
+    local ALL_HOSTS=$(terraform -chdir="$REPO" output -json all_hosts 2>/dev/null)
+    local MANAGER_IP=$(echo "$ALL_HOSTS" | jq -r '.[0].public_ip')
+    local SSH_USER=$(echo "$ALL_HOSTS" | jq -r '.[0].ssh_user')
+    local SSH_KEY=$(echo "$ALL_HOSTS" | jq -r '.[0].ssh_key_path')
     ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$SSH_KEY" "${SSH_USER}@${MANAGER_IP}" \
         "sudo cat /var/lib/k0s/pki/admin.conf" > "$REPO/artifacts/configs/kubeconfig.yaml"
     sed -i "s|server: .*|server: https://${MANAGER_IP}:6443|" "$REPO/artifacts/configs/kubeconfig.yaml"
@@ -238,6 +239,7 @@ _refresh_kubeconfig() {
 
 _upgrade_mke3_to_mke4() {
     echo "Running MKE3 → MKE4 upgrade..."
+    echo "NOTE: This modifies terraform.tfvars directly. Run 'make config-apply' after to re-sync from config.env."
 
     # Step 1: Run prereq (calico_kdd)
     echo "Running MKE3 upgrade prerequisite (calico_kdd)..."
@@ -283,6 +285,7 @@ _upgrade_mke4() {
     local MINOR=$(version_minor "$target_version")
 
     echo "Upgrading MKE4 to ${target_version}..."
+    echo "NOTE: This modifies terraform.tfvars directly. Run 'make config-apply' after to re-sync from config.env."
 
     # Ensure mkectl is available
     local BIN="$REPO/artifacts/bin/mkectl-v$target_version"
@@ -300,18 +303,18 @@ _upgrade_mke4() {
 
 _install_nfs_clients() {
     echo "Installing NFS client packages on all worker nodes..."
-    local SSH_KEY=$(find "$REPO/artifacts/ssh" -name '*.pem' | head -1)
-    local SSH_USER="ec2-user"
     local ALL_HOSTS=$(terraform -chdir="$REPO" output -json all_hosts 2>/dev/null)
 
     for row in $(echo "$ALL_HOSTS" | jq -r '.[] | @base64'); do
         _jq() { echo "$row" | base64 -d | jq -r "$1"; }
         local HOST_IP=$(_jq '.public_ip')
         local HOST_NAME=$(_jq '.name')
-        local ROLE=$(_jq '.role')
-        [[ "$ROLE" == "manager" ]] && continue
+        local HOST_ROLE=$(_jq '.roles[0]')
+        local HOST_SSH_USER=$(_jq '.ssh_user')
+        local HOST_SSH_KEY=$(_jq '.ssh_key_path')
+        [[ "$HOST_ROLE" == "manager" ]] && continue
         echo "  Installing NFS on ${HOST_NAME} (${HOST_IP})..."
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$SSH_KEY" "${SSH_USER}@${HOST_IP}" \
+        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i "$HOST_SSH_KEY" "${HOST_SSH_USER}@${HOST_IP}" \
             'bash -s' < "$REPO/artifacts/scripts/common/nfs_setup.sh" -- "/msr4" client || \
             echo "  WARN: NFS install on ${HOST_NAME} had issues"
     done

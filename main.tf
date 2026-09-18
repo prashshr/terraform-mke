@@ -80,6 +80,7 @@ locals {
   )
 
   msr_endpoint = coalesce(
+    local.msr_domain,
     local.aws_msr_lb_dns,
     local.hetzner_msr_lb_ip,
     try(local.msrs[0].public_ip, null),
@@ -99,6 +100,9 @@ locals {
     orchestrator_flag    = "--default-node-orchestrator=kubernetes"
     san                  = local.primary_manager_address
     msr_external_url     = local.msr_endpoint
+    msr_ca_cert_pem      = local.msr_tls_enabled ? file(local.msr_tls_ca_file) : ""
+    msr_cert_pem         = local.msr_tls_enabled ? file(local.msr_tls_cert_file) : ""
+    msr_key_pem          = local.msr_tls_enabled ? file(local.msr_tls_key_file) : ""
     license_file_path    = "./artifacts/mke-license/nfr.lic"
     mke_ca_cert_path     = local.mke3_tls_ca_path
     mke_cert_path        = local.mke3_tls_cert_path
@@ -152,7 +156,7 @@ locals {
   mkectl_cloud_provider    = try(local.all_hosts[0].provider, "aws")
   mkectl_network_cidr      = local.aws_enabled ? local.aws_settings_map.pod_cidr : "192.168.0.0/16"
   mkectl_service_cidr      = local.aws_enabled ? local.aws_settings_map.service_cidr : "10.96.0.0/16"
-  mkectl_api_external_host = local.mke4_domain
+  mkectl_api_external_host = local.mke4_ui_domain
   mkectl_upgrade_external_host = coalesce(
     local.aws_mke4_ui_lb_dns,
     local.hetzner_mke4_ui_lb_ip,
@@ -195,7 +199,7 @@ locals {
     network_cidr   = local.mkectl_network_cidr
     service_cidr   = local.mkectl_service_cidr
     api_server = {
-      external_address = local.mke4_domain
+      external_address = local.mke4_ui_domain
       sans             = local.mkectl_sans
     }
     gateway_http_node_port  = var.mke4_gateway_http_node_port

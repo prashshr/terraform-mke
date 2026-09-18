@@ -60,14 +60,21 @@ terraform-ps/
 │   └── write_tls_cert.sh      # Write TLS cert files to disk
 ├── artifacts/
 │   ├── scripts/
-│   │   ├── mkestack.sh        # Full lifecycle: destroy → init → apply → install
-│   │   ├── mkeupgrade.sh      # Upgrade orchestration (MKE3→MKE4, minor, MSR)
-│   │   ├── install_msr4.sh    # MSR4 Helm install with NFS setup
-│   │   ├── install_kof.sh     # KOF Helm install (MKE4 only, lean/full profiles)
-│   │   ├── install_k0rdent_ui.sh  # k0rdent-ui Helm install (MKE4 only)
-│   │   ├── nfs_setup.sh       # NFS client package installation
-│   │   ├── generate_msr_values.sh  # Generate MSR4 Helm values
-│   │   └── download_mkectl.sh # Download mkectl binary
+│   │   ├── common/
+│   │   │   ├── config_parser.sh       # Load config with env var overrides + timing helpers
+│   │   │   ├── completion.bash        # Tab completion for make targets
+│   │   │   ├── mkestack.sh            # Full lifecycle: destroy → init → apply → install
+│   │   │   └── mkeupgrade.sh          # Upgrade orchestration (MKE3→MKE4, minor, MSR)
+│   │   ├── msr2/
+│   │   │   └── msr2-dummy-data.sh     # DTR API: users, orgs, repos, image tags
+│   │   ├── msr4/
+│   │   │   ├── msr4-dummy-data.sh     # Harbor API: projects, users, repos
+│   │   │   └── install_msr4.sh        # MSR4 Helm install with NFS setup
+│   │   ├── install_kof.sh             # KOF Helm install (MKE4 only, lean/full profiles)
+│   │   ├── install_k0rdent_ui.sh      # k0rdent-ui Helm install (MKE4 only)
+│   │   ├── nfs_setup.sh               # NFS client package installation
+│   │   ├── generate_msr_values.sh     # Generate MSR4 Helm values
+│   │   └── download_mkectl.sh         # Download mkectl binary
 │   ├── msr4/values/           # MSR4 Helm values files
 │   ├── mke-license/           # MKE4 license token (nfr.lic)
 │   ├── ssh/                   # SSH keys (gitignored)
@@ -158,13 +165,38 @@ This project supports multiple providers and cluster types. Every change must pr
 
 ## Development Workflow
 
+### TypeSafe Skill Usage (MANDATORY)
+
+**Always use the TypeSafe skill for judgment and decision tasks.** Load it proactively — do not wait for the user to ask.
+
+Use TypeSafe when:
+- Reviewing code changes for safety/impact before implementing
+- Evaluating whether a fix is warranted given current deployment state
+- Ranking prioritization of findings or tasks
+- Classifying config changes (requires `terraform apply` vs `mkectl apply` vs no-op)
+- Assessing risk of destructive operations (destroy, state rm)
+- Choosing between multiple valid implementation approaches
+- Validating whether a recommendation is a false positive
+
+Do NOT use TypeSafe for:
+- Pure code comprehension (reading, grep, file navigation)
+- Mechanical transformations (renaming, find-and-replace)
+- Syntax validation (bash -n, python ast, terraform validate)
+
+**Workflow:**
+1. Load the TypeSafe skill at session start
+2. Before implementing any non-trivial change, ask a TypeSafe judgment question
+3. Consume the typed answer to guide the implementation decision
+4. If TypeSafe confidence is low (<0.7), escalate to the user
+
 ### Making Changes
 
 1. **Read this file first** — understand what must not break
 2. **Check git status** — never commit secrets or state files
-3. **Run `terraform validate`** — after any .tf changes
-4. **Run `terraform plan`** — verify no unexpected destruction
-5. **Test incrementally** — use `make plan` before `make apply`
+3. **Use TypeSafe skill** — validate decisions before implementing
+4. **Run `terraform validate`** — after any .tf changes
+5. **Run `terraform plan`** — verify no unexpected destruction
+6. **Test incrementally** — use `make plan` before `make apply`
 
 ### File Sizes (Target: <200 lines/file)
 - `main.tf`: Currently 1,001 lines — needs splitting
@@ -187,6 +219,8 @@ make list-running      # Rich tabular status with health, OS, IPs & versions
 make destroy mke4stack # Auto-approved destroy (default: FORCE_DESTROY=true)
 make destroy mke3stack # Auto-approved destroy
 make destroy           # Auto-approved destroy of active cluster
+make dummy-data-msr2   # Populate MSR2 (DTR) with users, orgs, repos
+make dummy-data-msr4   # Populate MSR4 (Harbor) with users, projects, repos
 ```
 
 ### Testing New Features
@@ -217,6 +251,8 @@ YES=1 LOG=1 make mkestack
 7. **SSH key path**: `artifacts/ssh/ps-mke-aws.pem`
 8. **MCR version**: Default `25.0.13`
 9. **NFS pre-install**: Required on ALL worker nodes before MSR4 install
+10. **DTR 2.9.x TLS flags**: `--dtr-cert`, `--dtr-key`, `--dtr-ca` (NOT `--dtr-tls-*`). MSR has no native TLS fields in Launchpad — must inline PEM content via `replace(pem, "\n", "\\n")` in installFlags
+11. **Launchpad MSR installFlags pass literally to Docker** — file paths don't work, DTR parses them as PEM content
 
 ---
 
@@ -243,7 +279,8 @@ YES=1 LOG=1 make mkestack
 ## Version History
 
 - Current MKE4: `4.2.0`
-- Current MKE3: `3.8.11`
+- Current MKE3: `3.9.5`
+- Current MSR2: `2.9.30`
 - Current MSR4: `4.13.5`
 - Current MCR: `25.0.13`
 

@@ -149,6 +149,10 @@ locals {
     try(local.cloudflare_settings_map.record_name_msr4, null),
     local.msr4_domain
   )
+  cloudflare_record_name_msr = coalesce(
+    try(local.cloudflare_settings_map.record_name_msr, null),
+    local.msr_domain
+  )
   cloudflare_record_name_kof = coalesce(
     try(local.cloudflare_settings_map.record_name_kof, null),
     local.kof_domain

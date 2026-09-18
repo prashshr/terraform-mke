@@ -10,10 +10,29 @@ load_config() {
     [[ ! -f "$default_file" && -f "${SCRIPT_DIR}/../../../config" ]] && default_file="${SCRIPT_DIR}/../../../config"
     local config_file="${1:-$default_file}"
 
+    # ── Save environment overrides (env vars must take precedence over config file) ──
+    local _saved=()
+    local _known_vars=(CLUSTER_NAME CLUSTER_TYPE ADMIN_USERNAME ADMIN_PASSWORD \
+        MKE3_VERSION MKE4_VERSION MSR4_VERSION MSR2_VERSION MCR_VERSION \
+        ENABLE_MSR MSR_VERSION MSR4_ENABLED MSR2_ENABLED \
+        FORCE_DESTROY MKECTL_TIMEOUT_MINS EXPIRY_DAYS \
+        MKE4_UI_DOMAIN APP_DOMAIN_MKE4_UI MKE4_APP_DOMAIN MKE3_APP_DOMAIN \
+        ROOT_DOMAIN TLS_EMAIL CLOUDFLARE_API_TOKEN)
+    for _v in "${_known_vars[@]}"; do
+        if [[ -n "${!_v:-}" ]]; then
+            _saved+=("$_v=${!_v}")
+        fi
+    done
+
     if [[ -f "$config_file" ]]; then
         # shellcheck disable=SC1090
         source "$config_file"
     fi
+
+    # ── Restore environment overrides (env vars beat config file) ────────────
+    for _sv in "${_saved[@]}"; do
+        export "${_sv%%=*}=${_sv#*=}"
+    done
 
     # ── Cluster ─────────────────────────────────────────────────────────────
     CLUSTER_NAME="${CLUSTER_NAME:-ps-mke}"

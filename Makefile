@@ -35,10 +35,14 @@ help: ## Show this help (config-driven workflow)
 	@echo "  make create mke4           Create MKE4 cluster (uses ./config.env)"
 	@echo "  make create mke3stack      Create MKE3 + classic MSR2"
 	@echo "  make create mke4stack      Create MKE4 + MSR4 (if MSR4_ENABLED=true)"
+	@echo "  make create msr4           Install MSR4 on existing cluster (auto-detects MKE3/MKE4)"
 	@echo "  make update [mke3|mke4..]  Update running stack in-place with new config"
 	@echo "  make list-running          Show running stacks, health, nodes, and versions"
 	@echo "  make destroy mke3stack     Destroy mke3 stack"
 	@echo "  make destroy mke4stack     Destroy mke4 stack"
+	@echo ""
+	@echo "  make dummy-data-msr2       Populate MSR2 (DTR) with dummy data"
+	@echo "  make dummy-data-msr4       Populate MSR4 (Harbor) with dummy data"
 	@echo ""
 	@echo "All versions / toggles (airgap, HA, versions) come from ./config.env."
 	@echo "Override: make create mke4 MKE4_VERSION=4.1.5"
@@ -55,16 +59,17 @@ config-edit: ## Open ./config.env in $$EDITOR
 	$${EDITOR:-vi} config.env
 
 # ── Create (config-driven fresh deployment) ────────────────────────────
-create: ## Create stack: make create mke3|mke4|mke3stack|mke4stack
-	@arg="$(filter mke3 mke4 mke3stack mke4stack,$(MAKECMDGOALS))"; \
+create: ## Create stack: make create mke3|mke4|mke3stack|mke4stack|msr4
+	@arg="$(filter mke3 mke4 mke3stack mke4stack msr4,$(MAKECMDGOALS))"; \
 	if [ -z "$$arg" ]; then \
-		echo "Usage: make create mke3|mke4|mke3stack|mke4stack"; exit 1; \
+		echo "Usage: make create mke3|mke4|mke3stack|mke4stack|msr4"; exit 1; \
 	fi; \
 	case "$$arg" in \
 	  mke3)       CLUSTER_TYPE=mke3 STACK=0 ;; \
 	  mke4)       CLUSTER_TYPE=mke4 STACK=0 ;; \
 	  mke3stack)  CLUSTER_TYPE=mke3 STACK=1 ;; \
 	  mke4stack)  CLUSTER_TYPE=mke4 STACK=1 ;; \
+	  msr4)       $(MAKE) --no-print-directory _create_msr4; exit $$? ;; \
 	esac; \
 	echo "→ make create $$arg  (CLUSTER_TYPE=$$CLUSTER_TYPE STACK=$$STACK)"; \
 	$(MAKE) --no-print-directory _create_inner CLUSTER_TYPE=$$CLUSTER_TYPE STACK=$$STACK MKECTL_TIMEOUT_MINS=$(MKECTL_TIMEOUT_MINS)
@@ -78,6 +83,7 @@ _create_inner:
 	LOG_FILE="logs/create-$(CLUSTER_TYPE)-$$(date +%Y%m%d-%H%M%S).log"; \
 	echo "Logging output to $$LOG_FILE"; \
 	exec > >(tee -a "$$LOG_FILE") 2>&1; \
+	set -euo pipefail; \
 	source artifacts/scripts/common/config_parser.sh && load_config; \
 	echo "→ config-apply..."; \
 	python3 artifacts/scripts/common/write_tfvars.py config.env terraform.tfvars; \
@@ -106,11 +112,44 @@ _create_inner:
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
 	    source config.env; \
 	    echo "→ installing MSR4 (stack mode)..."; \
-	    ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$${MSR4_HA:-false}" = "true" ] && echo --ha ) --msr-version "$${MSR4_VERSION:-4.13.5}" --domain "$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}" --yes; \
+	    ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$${MSR4_HA:-false}" = "true" ] && echo --ha || true ) --msr-version "$${MSR4_VERSION:-4.13.5}" --domain "$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}" --yes; \
 	  else \
 	    echo "→ MKE3 stack deployed with MSR2 via Launchpad."; \
 	  fi; \
 	fi
+
+# ── MSR4 standalone install (detects existing cluster) ───────────────
+_create_msr4:
+	@mkdir -p logs; \
+	LOG_FILE="logs/create-msr4-$$(date +%Y%m%d-%H%M%S).log"; \
+	echo "Logging output to $$LOG_FILE"; \
+	exec > >(tee -a "$$LOG_FILE") 2>&1; \
+	set -euo pipefail; \
+	source artifacts/scripts/common/config_parser.sh && load_config; \
+	echo "→ detecting existing cluster..."; \
+	KCFG=""; \
+	if [ -f "$$HOME/.mke/mke.kubeconf" ]; then KCFG="$$HOME/.mke/mke.kubeconf"; fi; \
+	CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/mke3/launchpad.yaml 2>/dev/null | awk '{print $$2}' || echo "ps-mke"); \
+	if [ -f "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" ]; then KCFG="$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml"; fi; \
+	if [ -f "artifacts/configs/kubeconfig.yaml" ]; then KCFG="artifacts/configs/kubeconfig.yaml"; fi; \
+	if [ -z "$$KCFG" ]; then echo "ERROR: No kubeconfig found. Deploy a cluster first."; exit 1; fi; \
+	export KUBECONFIG="$$KCFG"; \
+	if ! kubectl cluster-info >/dev/null 2>&1; then echo "ERROR: Cluster unreachable via $$KCFG"; exit 1; fi; \
+	echo "  KUBECONFIG=$$KCFG"; \
+	CLUSTER_TYPE_VAL="mke4"; \
+	if kubectl get crd launchpadconfigurations.launchpad.mirantis.com >/dev/null 2>&1; then \
+	  CLUSTER_TYPE_VAL="mke3"; \
+	fi; \
+	echo "  Detected cluster type: $$CLUSTER_TYPE_VAL"; \
+	source config.env; \
+	MSR4_V="$${MSR4_VERSION:-4.13.5}"; \
+	MSR4_D="$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}"; \
+	MSR4_HA_FLAG=""; \
+	if [ "$${MSR4_HA:-false}" = "true" ]; then MSR4_HA_FLAG="--ha"; fi; \
+	echo "→ installing MSR4 v$$MSR4_V on $$CLUSTER_TYPE_VAL cluster (domain: $$MSR4_D)..."; \
+	./artifacts/scripts/msr4/install_msr4.sh $$MSR4_HA_FLAG --msr-version "$$MSR4_V" --domain "$$MSR4_D" --yes; \
+	echo ""; \
+	echo "→ MSR4 installation complete. Run 'make list-running' to verify."
 
 # ── Update (in-place reconciliation without destroying infrastructure) ──
 update: ## Update stack in-place: make update [mke3|mke4|mke3stack|mke4stack]
@@ -133,6 +172,7 @@ _update_inner:
 	LOG_FILE="logs/update-$(CLUSTER_TYPE)-$$(date +%Y%m%d-%H%M%S).log"; \
 	echo "Logging output to $$LOG_FILE"; \
 	exec > >(tee -a "$$LOG_FILE") 2>&1; \
+	set -euo pipefail; \
 	source artifacts/scripts/common/config_parser.sh && load_config; \
 	echo "→ config-apply (re-generating tfvars & product configs)..."; \
 	python3 artifacts/scripts/common/write_tfvars.py config.env terraform.tfvars; \
@@ -160,7 +200,7 @@ _update_inner:
 	  if [ "$(CLUSTER_TYPE)" = "mke4" ]; then \
 	    source config.env; \
 	    echo "→ reconciling MSR4 (stack mode)..."; \
-	    ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$${MSR4_HA:-false}" = "true" ] && echo --ha ) --msr-version "$${MSR4_VERSION:-4.13.5}" --domain "$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}" --yes; \
+	    ./artifacts/scripts/msr4/install_msr4.sh $$( [ "$${MSR4_HA:-false}" = "true" ] && echo --ha || true ) --msr-version "$${MSR4_VERSION:-4.13.5}" --domain "$${MSR4_APP_DOMAIN:-msr4}.$${ROOT_DOMAIN:-samkhya.cloud}" --yes; \
 	  fi; \
 	fi; \
 	echo ""; \
@@ -174,6 +214,7 @@ destroy: ## Destroy stack: make destroy [mke4stack|mke3stack|mke4|mke3] (auto-ap
 	LOG_FILE="logs/destroy-$$(date +%Y%m%d-%H%M%S).log"; \
 	echo "Logging output to $$LOG_FILE"; \
 	exec > >(tee -a "$$LOG_FILE") 2>&1; \
+	set -euo pipefail; \
 	source artifacts/scripts/common/config_parser.sh && load_config; \
 	if [ "$$FORCE_DESTROY" = "true" ] || [ "$(FORCE_DESTROY)" = "true" ] || [ "$(YES)" = "1" ]; then \
 		echo "→ destroying $$arg (auto-approved, FORCE_DESTROY=true)..."; \
@@ -187,3 +228,10 @@ destroy: ## Destroy stack: make destroy [mke4stack|mke3stack|mke4|mke3] (auto-ap
 
 list-running: ## Show running stacks, health, nodes, and versions
 	@./artifacts/scripts/common/list_running.sh
+
+# ── Dummy data population ─────────────────────────────────────────────
+dummy-data-msr2: ## Populate MSR2 (DTR) with dummy users, orgs, repos, tags
+	@./artifacts/scripts/msr2/msr2-dummy-data.sh
+
+dummy-data-msr4: ## Populate MSR4 (Harbor) with dummy users, projects, repos, tags
+	@./artifacts/scripts/msr4/msr4-dummy-data.sh

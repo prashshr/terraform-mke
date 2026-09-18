@@ -151,7 +151,7 @@ variable "mke4_metallb_enabled" {
 variable "msr_version" {
   description = "MSR version when MSR hosts are requested."
   type        = string
-  default     = "2.9.29"
+  default     = "2.9.30"
 }
 
 variable "mcr_version" {
@@ -337,6 +337,8 @@ variable "cloudflare_settings" {
     record_name_ingress = optional(string)
     record_name_mke4    = optional(string)
     record_name_mke4_ui = optional(string)
+    record_name_msr     = optional(string)
+    record_name_msr4    = optional(string)
     api_token           = optional(string)
   })
   default = {}
