@@ -65,13 +65,6 @@ spec:
 %{ if msr_external_url != null ~}
       - --dtr-external-url ${msr_external_url}
 %{ endif ~}
-      # DTR 2.9.x TLS flags: --dtr-cert, --dtr-key, --dtr-ca (NOT --dtr-tls-*)
-      # MSR has no native TLS fields in Launchpad — must inline PEM content
-%{ if msr_ca_cert_pem != "" ~}
-      - --dtr-cert ${replace(msr_cert_pem, "\n", "\\n")}
-      - --dtr-key ${replace(msr_key_pem, "\n", "\\n")}
-      - --dtr-ca ${replace(msr_ca_cert_pem, "\n", "\\n")}
-%{ endif ~}
 %{ endif ~}
   mcr:
     channel: stable-${mcr_version}

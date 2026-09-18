@@ -100,9 +100,6 @@ locals {
     orchestrator_flag    = "--default-node-orchestrator=kubernetes"
     san                  = local.primary_manager_address
     msr_external_url     = local.msr_endpoint
-    msr_ca_cert_pem      = local.msr_tls_enabled ? file(local.msr_tls_ca_file) : ""
-    msr_cert_pem         = local.msr_tls_enabled ? file(local.msr_tls_cert_file) : ""
-    msr_key_pem          = local.msr_tls_enabled ? file(local.msr_tls_key_file) : ""
     license_file_path    = "./artifacts/mke-license/nfr.lic"
     mke_ca_cert_path     = local.mke3_tls_ca_path
     mke_cert_path        = local.mke3_tls_cert_path
