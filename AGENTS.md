@@ -253,6 +253,7 @@ YES=1 LOG=1 make mkestack
 9. **NFS pre-install**: Required on ALL worker nodes before MSR4 install
 10. **DTR 2.9.x TLS flags via Launchpad DON'T WORK**: `--dtr-cert`, `--dtr-key`, `--dtr-ca` cannot be passed via Launchpad installFlags. Launchpad passes flags to Docker via shell, which interprets `\n` escape sequences in inline PEM content, corrupting the certificate. DTR also doesn't accept file paths — it parses the entire value as PEM content. **Solution**: Do NOT pass TLS flags to MSR2 via Launchpad. DTR uses its built-in TLS behavior.
 11. **Launchpad MSR installFlags pass via shell to Docker** — shell interprets escape sequences in values, file paths don't work
+12. **Launchpad MSR native TLS fields**: Use `caCertData`, `certData`, `keyData` under `msr:` section — Launchpad uses `shellescape.Quote()` to properly escape PEM content before passing to Docker
 
 ---
 

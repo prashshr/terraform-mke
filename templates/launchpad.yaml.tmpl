@@ -60,6 +60,14 @@ spec:
 %{ if enable_msr ~}
   msr:
     version: ${msr_version}
+%{ if msr_ca_cert_pem != "" ~}
+    caCertData: |-
+${indent(4, msr_ca_cert_pem)}
+    certData: |-
+${indent(4, msr_cert_pem)}
+    keyData: |-
+${indent(4, msr_key_pem)}
+%{ endif ~}
     installFlags:
       #- --ucp-insecure-tls
 %{ if msr_external_url != null ~}
