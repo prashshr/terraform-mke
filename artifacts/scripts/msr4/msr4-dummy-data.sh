@@ -86,24 +86,31 @@ EOF
 fi
 
 # ---- varied base images for dummy repos (mix of latest + old versions) -----
-# Used to exercise MSR4 scanning across different distros/layers. Override the
-# whole set by exporting BASE_IMAGES (space-separated "name:tag" entries).
+# Only images that stay running with `docker run -id <image>` (daemon/CMD
+# doesn't exit immediately). Alpine/busybox/debian/ubuntu are excluded because
+# their default CMD (/bin/sh) exits without a TTY.
+# Override the whole set by exporting BASE_IMAGES (space-separated "name:tag").
 BASE_IMAGES=(
-  "alpine:latest"
-  "alpine:3.15"
-  "busybox:latest"
-  "busybox:1.31"
   "nginx:latest"
   "nginx:1.20"
-  "debian:latest"
-  "debian:10"
-  "ubuntu:latest"
-  "ubuntu:20.04"
   "redis:latest"
   "redis:6.2"
-  "node:18-alpine"
-  "python:3.9-slim"
   "httpd:2.4"
+  "httpd:latest"
+  "memcached:latest"
+  "memcached:1.6"
+  "mongo:latest"
+  "mongo:5.0"
+  "postgres:latest"
+  "postgres:14"
+  "mysql:latest"
+  "mysql:8.0"
+  "rabbitmq:latest"
+  "rabbitmq:3.11"
+  "varnish:latest"
+  "varnish:7.1"
+  "haproxy:latest"
+  "haproxy:2.6"
 )
 BASE_IMAGE_INDEX=0
 
