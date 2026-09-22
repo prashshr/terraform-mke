@@ -15,6 +15,21 @@ variable "cluster_type" {
   }
 }
 
+variable "use_wildcard_cert" {
+  description = "Use a single wildcard *.root_domain ACME certificate for all services (MKE3, MKE4, MSR2, MSR4, Ingress). Requires DNS-01 (Cloudflare)."
+  type        = bool
+  default     = false
+}
+
+variable "wildcard_tls" {
+  description = "TLS configuration for the shared wildcard certificate (*.root_domain)."
+  type = object({
+    enabled = optional(bool, true)
+    email   = optional(string)
+  })
+  default = {}
+}
+
 variable "root_domain" {
   description = "Primary DNS domain used for application hostnames."
   type        = string

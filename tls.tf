@@ -1,7 +1,7 @@
 # ── TLS: Artifact directories ────────────────────────────────────────────────
 resource "null_resource" "artifacts_dirs" {
   provisioner "local-exec" {
-    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_config_dir}\" \"${local.mke4_config_dir}\" \"${local.msr4_config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\" \"${local.msr4_tls_dir}\""
+    command = "mkdir -p \"${local.ssh_dir}\" \"${local.config_dir}\" \"${local.mke3_config_dir}\" \"${local.mke4_config_dir}\" \"${local.msr4_config_dir}\" \"${local.mke3_tls_dir}\" \"${local.mke4_tls_dir}\" \"${local.ingress_tls_dir}\" \"${local.msr_tls_dir}\" \"${local.msr4_tls_dir}\" \"${local.wildcard_tls_dir}\""
   }
 
   triggers = {
@@ -15,6 +15,7 @@ resource "null_resource" "artifacts_dirs" {
     tls_dir_msr     = local.msr_tls_dir
     tls_dir_mke4    = local.mke4_tls_dir
     tls_dir_msr4    = local.msr4_tls_dir
+    tls_dir_wildcard = local.wildcard_tls_dir
   }
 }
 
@@ -82,6 +83,105 @@ data "external" "msr4_tls_existing" {
     key_file          = local.msr4_tls_key_file
     min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
   }
+}
+
+# ── TLS: Wildcard ACME (*.samkhya.cloud) ────────────────────────────────────
+locals {
+  wildcard_tls_enabled = try(tobool(var.wildcard_tls.enabled), false) && var.use_wildcard_cert
+  wildcard_domain      = "*.${local.root_domain}"
+  wildcard_tls_dir     = "${local.artifacts_dir}/tlscerts/wildcard"
+  wildcard_tls_ca_file   = "${local.wildcard_tls_dir}/ca.pem"
+  wildcard_tls_cert_file = "${local.wildcard_tls_dir}/server.pem"
+  wildcard_tls_key_file  = "${local.wildcard_tls_dir}/key.pem"
+  wildcard_tls_email     = try(var.wildcard_tls.email, null)
+}
+
+data "external" "wildcard_tls_existing" {
+  count = local.wildcard_tls_enabled ? 1 : 0
+
+  program = ["bash", "${path.module}/artifacts/scripts/common/tls_cert_status.sh"]
+
+  query = {
+    domain            = local.wildcard_domain
+    cert_file         = local.wildcard_tls_cert_file
+    key_file          = local.wildcard_tls_key_file
+    min_valid_seconds = tostring(var.tls_reuse_min_validity_hours * 3600)
+  }
+}
+
+resource "tls_private_key" "wildcard_acme_account" {
+  count = local.wildcard_tls_enabled && local.wildcard_tls_email != null ? 1 : 0
+
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "acme_registration" "wildcard" {
+  count = local.wildcard_tls_enabled && local.wildcard_tls_email != null ? 1 : 0
+
+  account_key_pem = tls_private_key.wildcard_acme_account[0].private_key_pem
+  email_address   = local.wildcard_tls_email
+}
+
+resource "acme_certificate" "wildcard" {
+  count = local.wildcard_tls_enabled && local.wildcard_tls_email != null ? 1 : 0
+
+  account_key_pem               = acme_registration.wildcard[0].account_key_pem
+  common_name                   = local.wildcard_domain
+  revoke_certificate_on_destroy = false
+
+  dns_challenge {
+    provider = "cloudflare"
+    config = {
+      CLOUDFLARE_API_TOKEN = local.cloudflare_api_token
+    }
+  }
+}
+
+# Write wildcard cert files to disk
+resource "null_resource" "wildcard_tls_files" {
+  count = local.wildcard_tls_enabled && (
+    try(data.external.wildcard_tls_existing[0].result.valid, "false") != "true" ||
+    try(acme_certificate.wildcard[0].certificate_pem, null) != null
+  ) ? 1 : 0
+
+  triggers = {
+    ca_sha   = sha256(local.wildcard_tls_ca_pem)
+    cert_sha = sha256(local.wildcard_tls_cert_pem)
+    key_sha  = sha256(local.wildcard_tls_key_pem)
+    dir      = local.wildcard_tls_dir
+  }
+
+  provisioner "local-exec" {
+    command = "bash \"${path.module}/artifacts/scripts/common/write_tls_cert.sh\""
+    environment = {
+      TLS_DIR       = local.wildcard_tls_dir
+      TLS_CA_FILE   = local.wildcard_tls_ca_file
+      TLS_CERT_FILE = local.wildcard_tls_cert_file
+      TLS_KEY_FILE  = local.wildcard_tls_key_file
+      TLS_CA_PEM    = local.wildcard_tls_ca_pem
+      TLS_CERT_PEM  = local.wildcard_tls_cert_pem
+      TLS_KEY_PEM   = local.wildcard_tls_key_pem
+    }
+  }
+}
+
+# Wildcard cert locals (computed after ACME)
+locals {
+  wildcard_tls_use_existing = local.wildcard_tls_enabled && try(data.external.wildcard_tls_existing[0].result.valid == "true", false)
+  wildcard_tls_use_acme     = local.wildcard_tls_enabled && !local.wildcard_tls_use_existing && local.wildcard_tls_email != null
+
+  wildcard_tls_ca_pem = local.wildcard_tls_use_existing ? (
+    fileexists(local.wildcard_tls_ca_file) ? file(local.wildcard_tls_ca_file) : ""
+  ) : local.wildcard_tls_use_acme ? try(acme_certificate.wildcard[0].issuer_pem, "") : ""
+
+  wildcard_tls_cert_pem = local.wildcard_tls_use_existing ? (
+    fileexists(local.wildcard_tls_cert_file) ? file(local.wildcard_tls_cert_file) : ""
+  ) : local.wildcard_tls_use_acme ? try(acme_certificate.wildcard[0].certificate_pem, "") : ""
+
+  wildcard_tls_key_pem = local.wildcard_tls_use_existing ? (
+    fileexists(local.wildcard_tls_key_file) ? file(local.wildcard_tls_key_file) : ""
+  ) : local.wildcard_tls_use_acme ? try(acme_certificate.wildcard[0].private_key_pem, "") : ""
 }
 
 # ── TLS: MKE3 ACME ─────────────────────────────────────────────────────────

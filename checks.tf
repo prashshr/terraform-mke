@@ -53,3 +53,10 @@ check "msr_tls_acme_email" {
     error_message = "msr_tls has use_acme = true but no email address configured. Set msr_tls.email."
   }
 }
+
+check "wildcard_tls_acme_email" {
+  assert {
+    condition     = !local.wildcard_tls_use_acme || try(length(trimspace(local.wildcard_tls_email)), 0) > 0
+    error_message = "use_wildcard_cert = true but no email address configured. Set wildcard_tls.email."
+  }
+}

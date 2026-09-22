@@ -47,3 +47,17 @@ output "artifacts_directory" {
   description = "Absolute path to the artifacts directory."
   value       = local.artifacts_dir
 }
+
+output "wildcard_cert_enabled" {
+  description = "Whether the wildcard *.root_domain certificate is enabled."
+  value       = local.wildcard_tls_enabled
+}
+
+output "wildcard_cert_paths" {
+  description = "Paths to the wildcard certificate files (if enabled)."
+  value = local.wildcard_tls_enabled ? {
+    ca   = local.wildcard_tls_ca_file
+    cert = local.wildcard_tls_cert_file
+    key  = local.wildcard_tls_key_file
+  } : null
+}

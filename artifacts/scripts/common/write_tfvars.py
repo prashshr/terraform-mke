@@ -216,6 +216,16 @@ def generate_tfvars(config):
         lines.append(f'}}')
     lines.append('')
 
+    # Wildcard certificate (shared across all services)
+    use_wildcard = config.get('USE_WILDCARD_CERT', 'false').lower() == 'true'
+    wildcard_email = config.get('WILDCARD_TLS_EMAIL', email)
+    lines.append(f'use_wildcard_cert = {"true" if use_wildcard else "false"}')
+    lines.append('wildcard_tls = {')
+    lines.append(f'  enabled = {"true" if use_wildcard else "false"}')
+    lines.append(f'  email   = "{_hcl_escape(wildcard_email)}"')
+    lines.append('}')
+    lines.append('')
+
     # Cloudflare settings
     cf_enabled = config.get('CLOUDFLARE_ENABLED', 'false').lower() == 'true'
     cf_token = config.get('CLOUDFLARE_API_TOKEN', '')
