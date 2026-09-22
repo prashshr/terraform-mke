@@ -795,26 +795,47 @@ run_step "Step 6: TLS certificate setup"
 
 # Follow the same ACME + disk-caching pattern as MKE3/MKE4/ingress
 # Store at: artifacts/tlscerts/msr4/<domain>/ (server.pem, key.pem, ca.pem)
+# Check wildcard cert first (artifacts/tlscerts/wildcard/) when available
+WILDCARD_TLS_DIR="${TLS_DIR}/wildcard"
 MSR4_TLS_DIR="${TLS_DIR}/msr4/${DOMAIN}"
-MSR4_TLS_CERT="${MSR4_TLS_DIR}/server.pem"
-MSR4_TLS_KEY="${MSR4_TLS_DIR}/key.pem"
-MSR4_TLS_CA="${MSR4_TLS_DIR}/ca.pem"
 TLS_SECRET_NAME="msr4-tls-cert"
 MIN_VALID_HOURS=168  # 7 days minimum validity before re-issuance
 
 use_existing_cert=false
+SELECTED_TLS_DIR=""
 
-# Check if a cached ACME cert exists, is still valid, and matches the domain
-if [ -f "${MSR4_TLS_CERT}" ] && [ -f "${MSR4_TLS_KEY}" ]; then
+# Check wildcard cert first (covers *.samkhya.cloud)
+if [ -f "${WILDCARD_TLS_DIR}/server.pem" ] && [ -f "${WILDCARD_TLS_DIR}/key.pem" ]; then
+  log_info "Found wildcard cert at ${WILDCARD_TLS_DIR}"
+  MIN_VALID_SECONDS=$((MIN_VALID_HOURS * 3600))
+  if openssl x509 -in "${WILDCARD_TLS_DIR}/server.pem" -noout -checkend "${MIN_VALID_SECONDS}" 2>/dev/null; then
+    # Check if wildcard covers the domain (*.samkhya.cloud covers msr4.samkhya.cloud)
+    CERT_NAMES=$(openssl x509 -in "${WILDCARD_TLS_DIR}/server.pem" -noout -subject -ext subjectAltName 2>/dev/null || true)
+    ROOT_DOMAIN=$(echo "${DOMAIN}" | sed 's/^[^.]*\.//')  # extract root domain from msr4.samkhya.cloud
+    if echo "${CERT_NAMES}" | grep -Eq "(DNS:\\*\\.${ROOT_DOMAIN}|DNS:${DOMAIN})"; then
+      log_ok "Wildcard cert is valid (${MIN_VALID_HOURS}h+) and covers ${DOMAIN} — using wildcard"
+      use_existing_cert=true
+      SELECTED_TLS_DIR="${WILDCARD_TLS_DIR}"
+    else
+      log_info "Wildcard cert does not cover ${DOMAIN} — checking domain-specific cert"
+    fi
+  else
+    log_info "Wildcard cert expired or expiring soon — checking domain-specific cert"
+  fi
+fi
+
+# Fallback: check domain-specific cert
+if [ "${use_existing_cert}" = false ] && [ -f "${MSR4_TLS_DIR}/server.pem" ] && [ -f "${MSR4_TLS_DIR}/key.pem" ]; then
   log_info "Found cached cert at ${MSR4_TLS_DIR}"
   MIN_VALID_SECONDS=$((MIN_VALID_HOURS * 3600))
-  if openssl x509 -in "${MSR4_TLS_CERT}" -noout -checkend "${MIN_VALID_SECONDS}" 2>/dev/null; then
+  if openssl x509 -in "${MSR4_TLS_DIR}/server.pem" -noout -checkend "${MIN_VALID_SECONDS}" 2>/dev/null; then
     # Check domain matches in CN or SubjectAltName
-    CERT_NAMES=$(openssl x509 -in "${MSR4_TLS_CERT}" -noout -subject -ext subjectAltName 2>/dev/null || true)
+    CERT_NAMES=$(openssl x509 -in "${MSR4_TLS_DIR}/server.pem" -noout -subject -ext subjectAltName 2>/dev/null || true)
     DOMAIN_ESC=$(echo "${DOMAIN}" | sed 's/\./\\./g')
     if echo "${CERT_NAMES}" | grep -Eq "(DNS:|CN[ =])${DOMAIN_ESC}([,[:space:]]|$)"; then
       log_ok "Cached ACME cert is valid (${MIN_VALID_HOURS}h+) and matches ${DOMAIN} — reusing"
       use_existing_cert=true
+      SELECTED_TLS_DIR="${MSR4_TLS_DIR}"
     else
       log_info "Cached cert does not match domain ${DOMAIN} — will re-issue"
     fi
@@ -824,8 +845,11 @@ if [ -f "${MSR4_TLS_CERT}" ] && [ -f "${MSR4_TLS_KEY}" ]; then
 fi
 
 if [ "${use_existing_cert}" = true ]; then
+  MSR4_TLS_CERT="${SELECTED_TLS_DIR}/server.pem"
+  MSR4_TLS_KEY="${SELECTED_TLS_DIR}/key.pem"
+  MSR4_TLS_CA="${SELECTED_TLS_DIR}/ca.pem"
   # Bundle leaf cert with CA chain for proper validation
-  MSR4_TLS_CERT_BUNDLE="${MSR4_TLS_DIR}/fullchain.pem"
+  MSR4_TLS_CERT_BUNDLE="${SELECTED_TLS_DIR}/fullchain.pem"
   cat "${MSR4_TLS_CERT}" "${MSR4_TLS_CA}" > "${MSR4_TLS_CERT_BUNDLE}" 2>/dev/null || cp "${MSR4_TLS_CERT}" "${MSR4_TLS_CERT_BUNDLE}"
   kubectl create secret tls "${TLS_SECRET_NAME}" \
     --cert="${MSR4_TLS_CERT_BUNDLE}" \

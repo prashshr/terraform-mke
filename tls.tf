@@ -477,6 +477,44 @@ resource "null_resource" "msr4_tls_files" {
 
 # ── TLS: Computed locals ───────────────────────────────────────────────────
 locals {
+  # ── Wildcard selection: when use_wildcard_cert=true, all services use the wildcard cert ──
+  # MKE3 paths (file-based for launchpad)
+  mke3_effective_tls_ca_path = local.wildcard_tls_enabled ? (
+    "${local.wildcard_tls_dir}/ca.pem"
+  ) : local.mke3_tls_ca_path
+  mke3_effective_tls_cert_path = local.wildcard_tls_enabled ? (
+    "${local.wildcard_tls_dir}/server.pem"
+  ) : local.mke3_tls_cert_path
+  mke3_effective_tls_key_path = local.wildcard_tls_enabled ? (
+    "${local.wildcard_tls_dir}/key.pem"
+  ) : local.mke3_tls_key_path
+  mke3_effective_tls_common_name = local.wildcard_tls_enabled ? (
+    local.wildcard_domain
+  ) : local.mke3_tls_common_name
+
+  # MSR2 PEMs (inline in launchpad msr section)
+  msr2_effective_ca_pem = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : (
+    local.msr_tls_enabled ? file(local.msr_tls_ca_file) : ""
+  )
+  msr2_effective_cert_pem = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : (
+    local.msr_tls_enabled ? file(local.msr_tls_cert_file) : ""
+  )
+  msr2_effective_key_pem = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : (
+    local.msr_tls_enabled ? file(local.msr_tls_key_file) : ""
+  )
+
+  # MKE4 PEMs (inline in mkectl template)
+  mke4_effective_tls_present = local.wildcard_tls_enabled || local.mke4_tls_present
+  mke4_effective_tls_common_name = local.wildcard_tls_enabled ? (
+    local.wildcard_domain
+  ) : local.mke4_tls_common_name
+  mke4_effective_tls_ca_pem = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.mke4_tls_ca_pem
+  mke4_effective_tls_cert_pem = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.mke4_tls_cert_pem
+  mke4_effective_tls_key_pem = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.mke4_tls_key_pem
+
+  # MSR4 paths (file-based, checked by install_msr4.sh)
+  msr4_effective_tls_dir = local.wildcard_tls_enabled ? local.wildcard_tls_dir : "${local.artifacts_dir}/tlscerts/msr4"
+
   # MKE3 TLS
   mke3_tls = var.mke3_tls
 

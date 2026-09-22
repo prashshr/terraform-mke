@@ -100,14 +100,14 @@ locals {
     orchestrator_flag    = "--default-node-orchestrator=kubernetes"
     san                  = local.primary_manager_address
     msr_external_url     = local.msr_endpoint
-    msr_ca_cert_pem      = local.msr_tls_enabled ? file(local.msr_tls_ca_file) : ""
-    msr_cert_pem         = local.msr_tls_enabled ? file(local.msr_tls_cert_file) : ""
-    msr_key_pem          = local.msr_tls_enabled ? file(local.msr_tls_key_file) : ""
+    msr_ca_cert_pem      = local.msr2_effective_ca_pem
+    msr_cert_pem         = local.msr2_effective_cert_pem
+    msr_key_pem          = local.msr2_effective_key_pem
     license_file_path    = "./artifacts/mke-license/nfr.lic"
-    mke_ca_cert_path     = local.mke3_tls_ca_path
-    mke_cert_path        = local.mke3_tls_cert_path
-    mke_key_path         = local.mke3_tls_key_path
-    mke3_tls_common_name = local.mke3_tls_common_name
+    mke_ca_cert_path     = local.mke3_effective_tls_ca_path
+    mke_cert_path        = local.mke3_effective_tls_cert_path
+    mke_key_path         = local.mke3_effective_tls_key_path
+    mke3_tls_common_name = local.mke3_effective_tls_common_name
     managers = [for host in local.managers : {
       public_ip         = host.public_ip
       ssh_user          = host.ssh_user
@@ -205,11 +205,11 @@ locals {
     gateway_http_node_port  = var.mke4_gateway_http_node_port
     gateway_https_node_port = var.mke4_gateway_https_node_port
     metallb_enabled         = var.mke4_metallb_enabled
-    mke4_tls_present     = local.mke4_tls_present
-    mke4_tls_common_name = local.mke4_tls_common_name
-    mke4_tls_ca_pem      = local.mke4_tls_ca_pem
-    mke4_tls_cert_pem    = local.mke4_tls_cert_pem
-    mke4_tls_key_pem     = local.mke4_tls_key_pem
+    mke4_tls_present     = local.mke4_effective_tls_present
+    mke4_tls_common_name = local.mke4_effective_tls_common_name
+    mke4_tls_ca_pem      = local.mke4_effective_tls_ca_pem
+    mke4_tls_cert_pem    = local.mke4_effective_tls_cert_pem
+    mke4_tls_key_pem     = local.mke4_effective_tls_key_pem
     mke4_license_token   = local.mke4_license_token
   }
 
