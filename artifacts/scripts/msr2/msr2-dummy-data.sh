@@ -320,11 +320,13 @@ fi
 
 # 1) users — created via MKE3 UCP API when SSO is enabled
 echo
+USER_LIST=()
 if [[ "${SSO_ENABLED}" == "true" ]]; then
   echo "== Creating ${USERS} dummy users via MKE3 UCP API =="
   for (( u=1; u<=USERS; u++ )); do
     uname="${USER_NAMES[$(( (u-1) % ${#USER_NAMES[@]} ))]}"
     upass="Passw0rd-$((RANDOM % 100000))"
+    USER_LIST+=("${uname}")
     if mke_user_exists "${uname}"; then
       echo "  exists: ${uname}"
     else
@@ -342,13 +344,13 @@ fi
 
 # 2) orgs — created via MKE3 UCP API when SSO is enabled
 echo
+ORG_LIST=()
 if [[ "${SSO_ENABLED}" == "true" ]]; then
   echo "== Creating ${COUNT_ORG} organizations via MKE3 UCP API =="
 else
   echo "== Creating ${COUNT_ORG} organizations via DTR API =="
 fi
 
-ORG_LIST=()
 for (( o=1; o<=COUNT_ORG; o++ )); do
   oname="${ORG_NAMES[$(( (o-1) % ${#ORG_NAMES[@]} ))]}"
   ORG_LIST+=("${oname}")
@@ -362,7 +364,6 @@ for (( o=1; o<=COUNT_ORG; o++ )); do
         echo "  created org: ${oname}"
       else
         echo "  WARN: create org ${oname} returned HTTP ${code}; skipping" >&2
-        # remove from list so we don't try repos in a failed org
         unset 'ORG_LIST[-1]'
         continue
       fi
@@ -370,9 +371,34 @@ for (( o=1; o<=COUNT_ORG; o++ )); do
   fi
 done
 
-# 3) repos + tags
+# 3) push images to USER personal namespaces (like msr4)
 echo
-echo "== Creating repositories with tags =="
+echo "== Pushing images to user namespaces =="
+for uname in "${USER_LIST[@]}"; do
+  # Each user gets private repos
+  total_user_repo="${COUNT_PRIVATE_REPO}"
+  for (( r=1; r<=total_user_repo; r++ )); do
+    pick_base_image
+    rname="${CURRENT_BASE_IMAGE%%:*}"
+    if repo_exists "${uname}" "${rname}"; then
+      echo "  exists: ${uname}/${rname}"
+    else
+      code="$(create_repo "${uname}" "${rname}" "private")"
+      if [[ "${code}" == "201" || "${code}" == "200" ]]; then
+        echo "  created repo: ${uname}/${rname} (private)"
+      else
+        echo "  WARN: create repo ${uname}/${rname} returned HTTP ${code}; skipping" >&2
+        continue
+      fi
+    fi
+    echo "  [private] ${uname}/${rname} (${COUNT_TAGS_PER_REPO} tags) image=${CURRENT_BASE_IMAGE}"
+    push_dummy_image "${uname}" "${rname}" "${COUNT_TAGS_PER_REPO}" "${CURRENT_BASE_IMAGE}"
+  done
+done
+
+# 4) push images to ORG namespaces
+echo
+echo "== Pushing images to org namespaces =="
 for oname in "${ORG_LIST[@]}"; do
   total_repo=$(( COUNT_PRIVATE_REPO + COUNT_PUBLIC_REPO ))
   for (( r=1; r<=total_repo; r++ )); do
@@ -402,7 +428,8 @@ done
 
 echo
 echo "Done. Summary:"
-echo "  users created : ${USERS}"
+echo "  users created : ${#USER_LIST[@]}"
 echo "  orgs          : ${#ORG_LIST[@]}"
+echo "  repos/user    : ${COUNT_PRIVATE_REPO} private"
 echo "  repos/org     : ${COUNT_PRIVATE_REPO} private + ${COUNT_PUBLIC_REPO} public"
 echo "  tags/repo     : ${COUNT_TAGS_PER_REPO}"
