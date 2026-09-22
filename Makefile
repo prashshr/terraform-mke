@@ -128,11 +128,19 @@ _create_msr4:
 	source artifacts/scripts/common/config_parser.sh && load_config; \
 	echo "→ detecting existing cluster..."; \
 	KCFG=""; \
-	if [ -f "$$HOME/.mke/mke.kubeconf" ]; then KCFG="$$HOME/.mke/mke.kubeconf"; fi; \
-	CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/mke3/launchpad.yaml 2>/dev/null | awk '{print $$2}' || echo "ps-mke"); \
-	if [ -f "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" ]; then KCFG="$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml"; fi; \
-	if [ -f "artifacts/configs/kubeconfig.yaml" ]; then KCFG="artifacts/configs/kubeconfig.yaml"; fi; \
-	if [ -z "$$KCFG" ]; then echo "ERROR: No kubeconfig found. Deploy a cluster first."; exit 1; fi; \
+	if [ -n "$$KUBECONFIG" ] && [ -f "$$KUBECONFIG" ]; then KCFG="$$KUBECONFIG"; fi; \
+	if [ -z "$$KCFG" ]; then \
+	  CLUSTER_NAME_VAL=$$(grep -E '^[[:space:]]*name:' artifacts/configs/mke3/launchpad.yaml 2>/dev/null | awk '{print $$2}' || echo "ps-mke"); \
+	  for CANDIDATE in \
+	    "$$HOME/.mirantis-launchpad/cluster/$$CLUSTER_NAME_VAL/bundle/admin/kube.yml" \
+	    "$$HOME/.mke/mke.kubeconf" \
+	    "artifacts/configs/kubeconfig.yaml"; do \
+	    if [ -f "$$CANDIDATE" ] && KUBECONFIG="$$CANDIDATE" kubectl cluster-info >/dev/null 2>&1; then \
+	      KCFG="$$CANDIDATE"; break; \
+	    fi; \
+	  done; \
+	fi; \
+	if [ -z "$$KCFG" ]; then echo "ERROR: No reachable kubeconfig found. Deploy a cluster first."; exit 1; fi; \
 	export KUBECONFIG="$$KCFG"; \
 	if ! kubectl cluster-info >/dev/null 2>&1; then echo "ERROR: Cluster unreachable via $$KCFG"; exit 1; fi; \
 	echo "  KUBECONFIG=$$KCFG"; \
