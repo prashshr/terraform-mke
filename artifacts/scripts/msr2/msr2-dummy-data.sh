@@ -66,10 +66,35 @@ MSR2_ADMIN_USERNAME="${MSR2_ADMIN_USERNAME:-admin}"
 MSR2_ADMIN_PASSWORD="${MSR2_ADMIN_PASSWORD:-mkepassword}"
 MSR2_INSECURE="${MSR2_INSECURE:-true}"
 
-# MKE3/UCP connection (for user/org creation when SSO is enabled)
-MKE_URL="${MKE_URL:-https://mke3ui.samkhya.cloud:6443}"
+# Read MKE3 admin credentials from launchpad.yaml
+LAUNCHPAD_FILE="${ROOT_DIR}/artifacts/configs/mke3/launchpad.yaml"
+if [[ -f "${LAUNCHPAD_FILE}" ]]; then
+  MKE_ADMIN_USERNAME="$(grep -E '^\s*adminUsername:' "${LAUNCHPAD_FILE}" | awk '{print $2}' | tr -d '"'"'" | head -1)"
+  MKE_ADMIN_PASSWORD="$(grep -E '^\s*adminPassword:' "${LAUNCHPAD_FILE}" | awk '{print $2}' | tr -d '"'"'" | head -1)"
+fi
 MKE_ADMIN_USERNAME="${MKE_ADMIN_USERNAME:-admin}"
-MKE_ADMIN_PASSWORD="${MKE_ADMIN_PASSWORD:-${MSR2_ADMIN_PASSWORD}}"
+MKE_ADMIN_PASSWORD="${MKE_ADMIN_PASSWORD:-mkepassword}"
+
+# MKE3/UCP URL — use the ELB external address (UCP auth is on port 443, not 6443)
+# Can be overridden, or auto-detected from mkectl-upgrade.env
+MKE_URL="${MKE_URL:-}"
+if [[ -z "${MKE_URL}" ]]; then
+  # Try to read from mkectl-upgrade.env
+  UPGRADE_ENV="${ROOT_DIR}/artifacts/configs/mke4/mkectl-upgrade.env"
+  if [[ -f "${UPGRADE_ENV}" ]]; then
+    MKE_URL="$(grep -E '^MKCTL_MKE3_EXTERNAL_ADDRESS=' "${UPGRADE_ENV}" | cut -d= -f2- | tr -d "'\"")"
+  fi
+  # Fallback: extract from launchpad.yaml SANs
+  if [[ -z "${MKE_URL}" && -f "${LAUNCHPAD_FILE}" ]]; then
+    MKE_URL="$(grep -E '^\s*--san=.*elb\.' "${LAUNCHPAD_FILE}" | head -1 | sed 's/.*--san=//')"
+  fi
+  # Default
+  MKE_URL="${MKE_URL:-mke3ui.samkhya.cloud}"
+fi
+# Strip protocol if present, add https://
+MKE_URL="${MKE_URL#https://}"
+MKE_URL="${MKE_URL#http://}"
+MKE_URL="https://${MKE_URL}"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   mkdir -p "$(dirname "${ENV_FILE}")"
