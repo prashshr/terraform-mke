@@ -129,7 +129,7 @@ login() {
   local http_code
   http_code="$(curl -sS "${CURL_EXTRA[@]}" -o /dev/null -w '%{http_code}' \
     -u "${MSR2_ADMIN_USERNAME}:${MSR2_ADMIN_PASSWORD}" \
-    "${API}/accounts/self")"
+    "${API}/repositories?count=1")"
   if [[ "${http_code}" != "200" ]]; then
     echo "ERROR: failed to authenticate to MSR2 (HTTP ${http_code})." >&2
     exit 1
@@ -142,46 +142,53 @@ ORG_NAMES=("kai" "rune" "sita" "ren" "eira" "devi" "sora" "freya" "kavi" "odin" 
 USER_NAMES=("arjun" "astrid" "ren" "priya" "bjorn" "kiran" "leif" "nita" "soren" "amit" "eira" "hari" "yuki" "raju" "lata")
 REPO_NAMES=("lakshmi" "tor" "ganesh" "rune" "durga" "kai" "bharat" "freya" "indra" "sigyn" "omkar" "haru" "prasad" "ivar" "rohan")
 
+# Check if SSO is enabled (accounts managed by MKE, not DTR)
+SSO_ENABLED=false
+if api_get "${API}/meta/settings" | jq -e '.sso == true' >/dev/null 2>&1; then
+  SSO_ENABLED=true
+fi
+
+if [[ "${SSO_ENABLED}" == "true" ]]; then
+  echo "NOTE: SSO is enabled — users/orgs are managed by MKE, not DTR."
+  echo "      Skipping user/org creation; using 'admin' namespace for repos."
+fi
+
 org_exists() {
   local name="$1"
+  # Orgs with SSO are MKE-managed; check if namespace exists via repositories
   local code
-  code="$(api_get -o /dev/null -w '%{http_code}' "${API}/orgs/${name}")"
+  code="$(api_get -o /dev/null -w '%{http_code}' "${API}/repositories?namespace=${name}&count=1")"
   [[ "${code}" == "200" ]]
 }
 
 create_org() {
-  local name="$1"
-  api_post -X POST "${API}/orgs" \
-    -d "{\"name\":\"${name}\",\"fullName\":\"${name}\"}" \
-    -o /dev/null -w '%{http_code}'
+  # With SSO, orgs cannot be created via DTR API — always fail gracefully
+  echo "skip"
 }
 
 user_exists() {
   local username="$1"
-  local http_code
-  http_code="$(api_get -o /dev/null -w '%{http_code}' "${API}/accounts/${username}")"
-  [[ "${http_code}" == "200" ]]
+  # With SSO, users are MKE-managed; always report as exists to skip creation
+  [[ "${SSO_ENABLED}" == "true" ]]
 }
 
 create_user() {
-  local username="$1" password="$2" email="$3"
-  api_post -X POST "${API}/accounts" \
-    -d "{\"username\":\"${username}\",\"password\":\"${password}\",\"email\":\"${email}\",\"fullName\":\"${username}\"}" \
-    -o /dev/null -w '%{http_code}'
+  # With SSO, users cannot be created via DTR API — always fail gracefully
+  echo "skip"
 }
 
-# Create a repo in an org via DTR API
+# Create a repo in a namespace via DTR API
 repo_exists() {
   local org="$1" repo="$2"
   local http_code
-  http_code="$(api_get -o /dev/null -w '%{http_code}' "${API}/repos/${org}/${repo}")"
+  http_code="$(api_get -o /dev/null -w '%{http_code}' "${API}/repositories/${org}/${repo}")"
   [[ "${http_code}" == "200" ]]
 }
 
 create_repo() {
   local org="$1" repo="$2" visibility="$3"
-  api_post -X POST "${API}/repos" \
-    -d "{\"name\":\"${repo}\",\"namespace\":\"${org}\",\"shortDescription\":\"dummy repo\",\"visibility\":\"${visibility}\"}" \
+  api_post -X POST "${API}/repositories/${org}" \
+    -d "{\"name\":\"${repo}\",\"shortDescription\":\"dummy repo\",\"visibility\":\"${visibility}\"}" \
     -o /dev/null -w '%{http_code}'
 }
 
@@ -215,39 +222,56 @@ push_dummy_image() {
 # ---- main ------------------------------------------------------------------
 login
 
-# 1) users
-echo
-echo "== Creating ${USERS} dummy users =="
-for (( u=1; u<=USERS; u++ )); do
-  uname="${USER_NAMES[$(( (u-1) % ${#USER_NAMES[@]} ))]}"
-  upass="Passw0rd-$((RANDOM % 100000))"
-  mail="${uname}@example.com"
-  if user_exists "${uname}"; then
-    echo "  exists: ${uname}"
-  else
-    code="$(create_user "${uname}" "${upass}" "${mail}")"
-    if [[ "${code}" == "201" || "${code}" == "200" ]]; then
-      echo "  created: ${uname}"
+# 1) users (skipped when SSO is enabled)
+if [[ "${SSO_ENABLED}" == "true" ]]; then
+  echo
+  echo "== Skipping ${USERS} dummy users (SSO enabled — managed by MKE) =="
+else
+  echo
+  echo "== Creating ${USERS} dummy users =="
+  for (( u=1; u<=USERS; u++ )); do
+    uname="${USER_NAMES[$(( (u-1) % ${#USER_NAMES[@]} ))]}"
+    upass="Passw0rd-$((RANDOM % 100000))"
+    mail="${uname}@example.com"
+    if user_exists "${uname}"; then
+      echo "  exists: ${uname}"
     else
-      echo "  WARN: create user ${uname} returned HTTP ${code}" >&2
+      code="$(create_user "${uname}" "${upass}" "${mail}")"
+      if [[ "${code}" == "201" || "${code}" == "200" ]]; then
+        echo "  created: ${uname}"
+      else
+        echo "  WARN: create user ${uname} returned HTTP ${code}" >&2
+      fi
     fi
-  fi
-done
+  done
+fi
 
 # 2) orgs + repos + tags
 echo
-echo "== Creating ${COUNT_ORG} organizations with repositories/tags =="
-for (( o=1; o<=COUNT_ORG; o++ )); do
-  oname="${ORG_NAMES[$(( (o-1) % ${#ORG_NAMES[@]} ))]}"
-  if org_exists "${oname}"; then
-    echo "  exists: ${oname}"
-  else
-    code="$(create_org "${oname}")"
-    if [[ "${code}" == "201" || "${code}" == "200" ]]; then
-      echo "  created org: ${oname}"
+if [[ "${SSO_ENABLED}" == "true" ]]; then
+  # Single pass into admin namespace (SSO prevents creating orgs via DTR)
+  echo "== Creating repositories in 'admin' namespace (SSO enabled) =="
+  ORG_LIST=("admin")
+else
+  echo "== Creating ${COUNT_ORG} organizations with repositories/tags =="
+  ORG_LIST=()
+  for (( o=1; o<=COUNT_ORG; o++ )); do
+    ORG_LIST+=("${ORG_NAMES[$(( (o-1) % ${#ORG_NAMES[@]} ))]}")
+  done
+fi
+
+for oname in "${ORG_LIST[@]}"; do
+  if [[ "${SSO_ENABLED}" != "true" ]]; then
+    if org_exists "${oname}"; then
+      echo "  exists: ${oname}"
     else
-      echo "  WARN: create org ${oname} returned HTTP ${code}; skipping" >&2
-      continue
+      code="$(create_org "${oname}")"
+      if [[ "${code}" == "201" || "${code}" == "200" ]]; then
+        echo "  created org: ${oname}"
+      else
+        echo "  WARN: create org ${oname} returned HTTP ${code}; skipping" >&2
+        continue
+      fi
     fi
   fi
 
