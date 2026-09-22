@@ -16,6 +16,9 @@
 #   MSR2_ADMIN_USERNAME     admin account used to bootstrap data
 #   MSR2_ADMIN_PASSWORD     admin password
 #   MSR2_INSECURE           set to "true" to skip TLS verification (self-signed)
+#   MKE_URL                 MKE3/UCP URL (for user/org creation via UCP API)
+#   MKE_ADMIN_USERNAME      MKE3 admin username (default: admin)
+#   MKE_ADMIN_PASSWORD      MKE3 admin password
 #
 # Any of those may also be exported in the shell to override the env file.
 # No Terraform code is modified by this script.
@@ -63,6 +66,11 @@ MSR2_ADMIN_USERNAME="${MSR2_ADMIN_USERNAME:-admin}"
 MSR2_ADMIN_PASSWORD="${MSR2_ADMIN_PASSWORD:-mkepassword}"
 MSR2_INSECURE="${MSR2_INSECURE:-true}"
 
+# MKE3/UCP connection (for user/org creation when SSO is enabled)
+MKE_URL="${MKE_URL:-https://mke3ui.samkhya.cloud:6443}"
+MKE_ADMIN_USERNAME="${MKE_ADMIN_USERNAME:-admin}"
+MKE_ADMIN_PASSWORD="${MKE_ADMIN_PASSWORD:-${MSR2_ADMIN_PASSWORD}}"
+
 if [[ ! -f "${ENV_FILE}" ]]; then
   mkdir -p "$(dirname "${ENV_FILE}")"
   cat > "${ENV_FILE}" <<EOF
@@ -71,6 +79,9 @@ MSR2_URL='${MSR2_URL}'
 MSR2_ADMIN_USERNAME='${MSR2_ADMIN_USERNAME}'
 MSR2_ADMIN_PASSWORD='${MSR2_ADMIN_PASSWORD}'
 MSR2_INSECURE='${MSR2_INSECURE}'
+MKE_URL='${MKE_URL}'
+MKE_ADMIN_USERNAME='${MKE_ADMIN_USERNAME}'
+MKE_ADMIN_PASSWORD='${MKE_ADMIN_PASSWORD}'
 EOF
   chmod 0600 "${ENV_FILE}"
   echo "Created starter env file: ${ENV_FILE}"
@@ -109,8 +120,87 @@ if [[ "${MSR2_INSECURE}" == "true" ]]; then
 fi
 
 API="${MSR2_URL}/api/v0"
+MKE_API="${MKE_URL}"
 echo "Target MSR2 API: ${API}"
+echo "Target MKE3 API: ${MKE_API}"
 echo "Plan: users=${USERS} orgs=${COUNT_ORG} tags/repo=${COUNT_TAGS_PER_REPO} private_repo/org=${COUNT_PRIVATE_REPO} public_repo/org=${COUNT_PUBLIC_REPO}"
+
+# ---- MKE3/UCP API helpers (bearer token auth) -------------------------------
+MKE_TOKEN=""
+
+mke_login() {
+  local resp
+  resp="$(curl -sS "${CURL_EXTRA[@]}" -kL \
+    -H 'accept: application/json' -H 'content-type: application/json' \
+    -d "{\"username\":\"${MKE_ADMIN_USERNAME}\",\"password\":\"${MKE_ADMIN_PASSWORD}\"}" \
+    "${MKE_API}/auth/login")"
+  MKE_TOKEN="$(echo "${resp}" | jq -r '.auth_token // empty')"
+  if [[ -z "${MKE_TOKEN}" ]]; then
+    echo "ERROR: failed to authenticate to MKE3 at ${MKE_API}." >&2
+    echo "  Response: ${resp}" >&2
+    return 1
+  fi
+  echo "Authenticated to MKE3 as ${MKE_ADMIN_USERNAME}"
+}
+
+mke_api_get() {
+  curl -sS "${CURL_EXTRA[@]}" -kL \
+    -H 'accept: application/json' \
+    -H "Authorization: Bearer ${MKE_TOKEN}" \
+    "$@"
+}
+
+mke_api_post() {
+  curl -sS "${CURL_EXTRA[@]}" -kL \
+    -H 'accept: application/json' -H 'content-type: application/json' \
+    -H "Authorization: Bearer ${MKE_TOKEN}" \
+    "$@"
+}
+
+mke_api_put() {
+  curl -sS "${CURL_EXTRA[@]}" -kL \
+    -X PUT \
+    -H 'accept: application/json' -H 'content-type: application/json' \
+    -H "Authorization: Bearer ${MKE_TOKEN}" \
+    "$@"
+}
+
+# Create a user via MKE3 UCP API
+mke_user_exists() {
+  local name="$1"
+  local http_code
+  http_code="$(mke_api_get -o /dev/null -w '%{http_code}' "${MKE_API}/accounts/${name}")"
+  [[ "${http_code}" == "200" ]]
+}
+
+mke_create_user() {
+  local name="$1" password="$2"
+  mke_api_post -X POST "${MKE_API}/accounts/" \
+    -d "{\"fullName\":\"${name}\",\"isActive\":true,\"isAdmin\":false,\"isOrg\":false,\"password\":\"${password}\",\"name\":\"${name}\"}" \
+    -o /dev/null -w '%{http_code}'
+}
+
+# Create an org via MKE3 UCP API
+mke_org_exists() {
+  local name="$1"
+  local http_code
+  http_code="$(mke_api_get -o /dev/null -w '%{http_code}' "${MKE_API}/accounts/${name}")"
+  [[ "${http_code}" == "200" ]]
+}
+
+mke_create_org() {
+  local name="$1"
+  mke_api_post -X POST "${MKE_API}/accounts/" \
+    -d "{\"name\":\"${name}\",\"isOrg\":true}" \
+    -o /dev/null -w '%{http_code}'
+}
+
+mke_get_org_id() {
+  local name="$1"
+  mke_api_get "${MKE_API}/accounts/${name}" | jq -r '.id // empty'
+}
+
+# ---- DTR API helpers (basic auth for repos/images) --------------------------
 
 # ---- helpers ----------------------------------------------------------------
 api_get() {
@@ -175,33 +265,8 @@ if api_get "${API}/meta/settings" | jq -e '.sso == true' >/dev/null 2>&1; then
 fi
 
 if [[ "${SSO_ENABLED}" == "true" ]]; then
-  echo "NOTE: SSO is enabled — users/orgs are managed by MKE, not DTR."
-  echo "      Skipping user/org creation; using 'admin' namespace for repos."
+  echo "NOTE: SSO is enabled — users/orgs are managed by MKE3 (UCP API)."
 fi
-
-org_exists() {
-  local name="$1"
-  # Orgs with SSO are MKE-managed; check if namespace exists via repositories
-  local code
-  code="$(api_get -o /dev/null -w '%{http_code}' "${API}/repositories?namespace=${name}&count=1")"
-  [[ "${code}" == "200" ]]
-}
-
-create_org() {
-  # With SSO, orgs cannot be created via DTR API — always fail gracefully
-  echo "skip"
-}
-
-user_exists() {
-  local username="$1"
-  # With SSO, users are MKE-managed; always report as exists to skip creation
-  [[ "${SSO_ENABLED}" == "true" ]]
-}
-
-create_user() {
-  # With SSO, users cannot be created via DTR API — always fail gracefully
-  echo "skip"
-}
 
 # Create a repo in a namespace via DTR API
 repo_exists() {
@@ -248,21 +313,22 @@ push_dummy_image() {
 # ---- main ------------------------------------------------------------------
 login
 
-# 1) users (skipped when SSO is enabled)
+# Authenticate to MKE3 if SSO is enabled (needed for user/org creation)
 if [[ "${SSO_ENABLED}" == "true" ]]; then
-  echo
-  echo "== Skipping ${USERS} dummy users (SSO enabled — managed by MKE) =="
-else
-  echo
-  echo "== Creating ${USERS} dummy users =="
+  mke_login
+fi
+
+# 1) users — created via MKE3 UCP API when SSO is enabled
+echo
+if [[ "${SSO_ENABLED}" == "true" ]]; then
+  echo "== Creating ${USERS} dummy users via MKE3 UCP API =="
   for (( u=1; u<=USERS; u++ )); do
     uname="${USER_NAMES[$(( (u-1) % ${#USER_NAMES[@]} ))]}"
     upass="Passw0rd-$((RANDOM % 100000))"
-    mail="${uname}@example.com"
-    if user_exists "${uname}"; then
+    if mke_user_exists "${uname}"; then
       echo "  exists: ${uname}"
     else
-      code="$(create_user "${uname}" "${upass}" "${mail}")"
+      code="$(mke_create_user "${uname}" "${upass}")"
       if [[ "${code}" == "201" || "${code}" == "200" ]]; then
         echo "  created: ${uname}"
       else
@@ -270,37 +336,44 @@ else
       fi
     fi
   done
+else
+  echo "== Skipping users (SSO disabled — DTR manages its own users) =="
 fi
 
-# 2) orgs + repos + tags
+# 2) orgs — created via MKE3 UCP API when SSO is enabled
 echo
 if [[ "${SSO_ENABLED}" == "true" ]]; then
-  # Single pass into admin namespace (SSO prevents creating orgs via DTR)
-  echo "== Creating repositories in 'admin' namespace (SSO enabled) =="
-  ORG_LIST=("admin")
+  echo "== Creating ${COUNT_ORG} organizations via MKE3 UCP API =="
 else
-  echo "== Creating ${COUNT_ORG} organizations with repositories/tags =="
-  ORG_LIST=()
-  for (( o=1; o<=COUNT_ORG; o++ )); do
-    ORG_LIST+=("${ORG_NAMES[$(( (o-1) % ${#ORG_NAMES[@]} ))]}")
-  done
+  echo "== Creating ${COUNT_ORG} organizations via DTR API =="
 fi
 
-for oname in "${ORG_LIST[@]}"; do
-  if [[ "${SSO_ENABLED}" != "true" ]]; then
-    if org_exists "${oname}"; then
+ORG_LIST=()
+for (( o=1; o<=COUNT_ORG; o++ )); do
+  oname="${ORG_NAMES[$(( (o-1) % ${#ORG_NAMES[@]} ))]}"
+  ORG_LIST+=("${oname}")
+
+  if [[ "${SSO_ENABLED}" == "true" ]]; then
+    if mke_org_exists "${oname}"; then
       echo "  exists: ${oname}"
     else
-      code="$(create_org "${oname}")"
+      code="$(mke_create_org "${oname}")"
       if [[ "${code}" == "201" || "${code}" == "200" ]]; then
         echo "  created org: ${oname}"
       else
         echo "  WARN: create org ${oname} returned HTTP ${code}; skipping" >&2
+        # remove from list so we don't try repos in a failed org
+        unset 'ORG_LIST[-1]'
         continue
       fi
     fi
   fi
+done
 
+# 3) repos + tags
+echo
+echo "== Creating repositories with tags =="
+for oname in "${ORG_LIST[@]}"; do
   total_repo=$(( COUNT_PRIVATE_REPO + COUNT_PUBLIC_REPO ))
   for (( r=1; r<=total_repo; r++ )); do
     if (( r <= COUNT_PUBLIC_REPO )); then
@@ -330,6 +403,6 @@ done
 echo
 echo "Done. Summary:"
 echo "  users created : ${USERS}"
-echo "  orgs          : ${COUNT_ORG}"
+echo "  orgs          : ${#ORG_LIST[@]}"
 echo "  repos/org     : ${COUNT_PRIVATE_REPO} private + ${COUNT_PUBLIC_REPO} public"
 echo "  tags/repo     : ${COUNT_TAGS_PER_REPO}"
