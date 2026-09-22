@@ -444,6 +444,12 @@ resource "aws_instance" "node" {
     Role                                        = length(each.value.roles) > 0 ? each.value.roles[0] : "worker"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }, each.value.labels)
+
+  # user_data is managed solely by aws_launch_template; the instance attribute
+  # is populated from the template at launch and drifts in plan otherwise.
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 }
 
 data "aws_region" "current" {}

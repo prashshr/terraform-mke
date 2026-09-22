@@ -38,12 +38,15 @@ output "cluster_expires_at" {
 
 output "cluster_expiry_warning" {
   description = "Warning message if cluster is near expiry."
+  # NOTE: Do not use timestamp() here — it changes every plan and prevents
+  # terraform plan from converging to "No changes". Dates are static from
+  # time_static.created + expiry_days.
   value = var.expiry_days > 0 ? (
     <<-EOT
     ⚠️  CLUSTER EXPIRY WARNING
     Created: ${time_static.created[0].rfc3339}
     Expires: ${timeadd(time_static.created[0].rfc3339, "${var.expiry_days * 24}h")}
-    Days remaining: ${max(0, var.expiry_days - (tonumber(formatdate("hh", timestamp())) / 24))}
+    Duration: ${var.expiry_days} days
     To extend: Update EXPIRY_DAYS in config.env and run: make config-apply
     To destroy: make destroy
     EOT

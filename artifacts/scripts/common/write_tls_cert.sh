@@ -9,19 +9,13 @@ if [[ -n "${TLS_CA_PEM:-}" ]]; then
 fi
 
 if [[ -n "${TLS_CERT_PEM:-}" ]]; then
-  # Bundle the CA chain into the cert file so the server serves the full chain.
-  # Idempotent: if cert_pem already contains the CA (e.g. read back from a
-  # previously bundled server.pem via use_existing), do not append again.
-  if [[ -n "${TLS_CA_PEM:-}" ]]; then
-    ca_head=$(printf '%s\n' "$TLS_CA_PEM" | head -1)
-    if printf '%s' "$TLS_CERT_PEM" | grep -qF "$ca_head"; then
-      printf '%s' "$TLS_CERT_PEM" > "$TLS_CERT_FILE"
-    else
-      printf '%s\n%s' "$TLS_CERT_PEM" "$TLS_CA_PEM" > "$TLS_CERT_FILE"
-    fi
-  else
-    printf '%s' "$TLS_CERT_PEM" > "$TLS_CERT_FILE"
-  fi
+  # Write cert exactly as provided — do NOT bundle CA into server.pem.
+  # Mutating cert content here makes disk != plan-time local.wildcard_tls_cert_pem
+  # (which reads the file via file()), causing perpetual plan drift on
+  # null_resource.wildcard_tls_files and local_sensitive_file.launchpad.
+  # Consumers that need a full chain build fullchain.pem separately
+  # (e.g. install_msr4.sh: cat server.pem ca.pem > fullchain.pem).
+  printf '%s' "$TLS_CERT_PEM" > "$TLS_CERT_FILE"
   chmod 0600 "$TLS_CERT_FILE"
 fi
 
