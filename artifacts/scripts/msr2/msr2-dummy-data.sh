@@ -137,10 +137,36 @@ login() {
   echo "Authenticated to MSR2 as ${MSR2_ADMIN_USERNAME}"
 }
 
-# Readable name pools
+# Readable name pools (for orgs/users — repos use base image names)
 ORG_NAMES=("kai" "rune" "sita" "ren" "eira" "devi" "sora" "freya" "kavi" "odin" "meena" "zen" "tara" "sigrid" "yuki")
 USER_NAMES=("arjun" "astrid" "ren" "priya" "bjorn" "kiran" "leif" "nita" "soren" "amit" "eira" "hari" "yuki" "raju" "lata")
-REPO_NAMES=("lakshmi" "tor" "ganesh" "rune" "durga" "kai" "bharat" "freya" "indra" "sigyn" "omkar" "haru" "prasad" "ivar" "rohan")
+
+# Generate tags derived from the base image tag.
+# First tag preserves the original (e.g. "latest", "1.20"); subsequent tags
+# increment as plausible versions when the tag looks numeric, else append index.
+generate_tags() {
+  local base_tag="$1" count="$2"
+  local i
+  printf '%s\n' "${base_tag}"
+  if [[ "${base_tag}" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+    # X.Y → X.Y.1, X.Y.2, ...
+    local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}"
+    for (( i=1; i<count; i++ )); do
+      printf '%s\n' "${major}.${minor}.${i}"
+    done
+  elif [[ "${base_tag}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    # X.Y.Z → increment patch
+    local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
+    for (( i=1; i<count; i++ )); do
+      printf '%s\n' "${major}.${minor}.$((patch + i))"
+    done
+  else
+    # latest, slim, alpine, etc → append index
+    for (( i=1; i<count; i++ )); do
+      printf '%s\n' "${base_tag}-${i}"
+    done
+  fi
+}
 
 # Check if SSO is enabled (accounts managed by MKE, not DTR)
 SSO_ENABLED=false
@@ -195,6 +221,7 @@ create_repo() {
 push_dummy_image() {
   local org="$1" repo="$2" tag_count="$3" base_img="$4"
   local target="${MSR2_URL#*://}/${org}/${repo}"
+  local base_tag="${base_img##*:}"
 
   if ! docker login "${MSR2_URL#*://}" \
         --username "${MSR2_ADMIN_USERNAME}" \
@@ -205,9 +232,8 @@ push_dummy_image() {
 
   docker pull "${base_img}" >/dev/null 2>&1 || true
 
-  local i tag ref
-  for (( i=1; i<=tag_count; i++ )); do
-    tag="v$(printf '%03d' "${i}")"
+  local tag ref
+  while IFS= read -r tag; do
     ref="${target}:${tag}"
     docker tag "${base_img}" "${ref}" >/dev/null 2>&1
     PUSHED_LOCAL_REFS+=("${ref}")
@@ -216,7 +242,7 @@ push_dummy_image() {
     else
       echo "    WARN: failed to push ${ref}" >&2
     fi
-  done
+  done < <(generate_tags "${base_tag}" "${tag_count}")
 }
 
 # ---- main ------------------------------------------------------------------
@@ -282,8 +308,9 @@ for oname in "${ORG_LIST[@]}"; do
     else
       visibility="private"
     fi
-    rname="${REPO_NAMES[$(( (r-1) % ${#REPO_NAMES[@]} ))]}"
     pick_base_image
+    # Repo name = base image name (e.g. nginx, alpine, busybox)
+    rname="${CURRENT_BASE_IMAGE%%:*}"
     if repo_exists "${oname}" "${rname}"; then
       echo "  exists: ${oname}/${rname}"
     else

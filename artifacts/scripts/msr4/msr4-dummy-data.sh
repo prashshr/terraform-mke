@@ -145,10 +145,36 @@ login() {
   echo "Authenticated to MSR4 as ${MSR4_ADMIN_USERNAME}"
 }
 
-# Readable name pools (cycle through by index)
+# Readable name pools (cycle through by index — repos use base image names)
 PROJECT_NAMES=("kai" "rune" "sita" "ren" "eira" "devi" "sora" "freya" "kavi" "odin" "meena" "zen" "tara" "sigrid" "yuki")
 USER_NAMES=("arjun" "astrid" "ren" "priya" "bjorn" "kiran" "leif" "nita" "soren" "amit" "eira" "hari" "yuki" "raju" "lata")
-REPO_NAMES=("lakshmi" "tor" "ganesh" "rune" "durga" "kai" "bharat" "freya" "indra" "sigyn" "omkar" "haru" "prasad" "ivar" "rohan")
+
+# Generate tags derived from the base image tag.
+# First tag preserves the original (e.g. "latest", "1.20"); subsequent tags
+# increment as plausible versions when the tag looks numeric, else append index.
+generate_tags() {
+  local base_tag="$1" count="$2"
+  local i
+  printf '%s\n' "${base_tag}"
+  if [[ "${base_tag}" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+    # X.Y → X.Y.1, X.Y.2, ...
+    local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}"
+    for (( i=1; i<count; i++ )); do
+      printf '%s\n' "${major}.${minor}.${i}"
+    done
+  elif [[ "${base_tag}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    # X.Y.Z → increment patch
+    local major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
+    for (( i=1; i<count; i++ )); do
+      printf '%s\n' "${major}.${minor}.$((patch + i))"
+    done
+  else
+    # latest, slim, alpine, etc → append index
+    for (( i=1; i<count; i++ )); do
+      printf '%s\n' "${base_tag}-${i}"
+    done
+  fi
+}
 
 project_exists() {
   local name="$1"
@@ -182,6 +208,7 @@ create_user() {
 push_dummy_image() {
   local project="$1" repo="$2" tag_count="$3" base_img="$4"
   local target="${MSR4_URL#*://}/${project}/${repo}"
+  local base_tag="${base_img##*:}"
 
   # ensure we are logged in to the registry for docker push
   if ! docker login "${MSR4_URL#*://}" \
@@ -193,18 +220,17 @@ push_dummy_image() {
 
   docker pull "${base_img}" >/dev/null 2>&1 || true
 
-  local i tag ref
-  for (( i=1; i<=tag_count; i++ )); do
-    tag="v$(printf '%03d' "${i}")"
+  local tag ref
+  while IFS= read -r tag; do
     ref="${target}:${tag}"
     docker tag "${base_img}" "${ref}" >/dev/null 2>&1
     PUSHED_LOCAL_REFS+=("${ref}")
-    if     docker push "${ref}" >/dev/null 2>&1; then
+    if docker push "${ref}" >/dev/null 2>&1; then
       echo "    docker push ${ref} (from ${base_img})"
     else
       echo "    WARN: failed to push ${ref}" >&2
     fi
-  done
+  done < <(generate_tags "${base_tag}" "${tag_count}")
 }
 
 # ---- main ------------------------------------------------------------------
@@ -263,8 +289,9 @@ for (( p=1; p<=COUNT_PROJECT; p++ )); do
       visibility="private"
       repo_target_project="${pname}"
     fi
-    rname="${REPO_NAMES[$(( (r-1) % ${#REPO_NAMES[@]} ))]}"
     pick_base_image
+    # Repo name = base image name (e.g. nginx, alpine, busybox)
+    rname="${CURRENT_BASE_IMAGE%%:*}"
     echo "  [${visibility}] ${repo_target_project}/${rname} (${COUNT_TAGS_PER_PROJECT} tags) image=${CURRENT_BASE_IMAGE}"
     push_dummy_image "${repo_target_project}" "${rname}" "${COUNT_TAGS_PER_PROJECT}" "${CURRENT_BASE_IMAGE}"
   done
