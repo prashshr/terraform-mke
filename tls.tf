@@ -124,7 +124,9 @@ resource "acme_registration" "wildcard" {
 }
 
 resource "acme_certificate" "wildcard" {
-  count = local.wildcard_tls_enabled && local.wildcard_tls_email != null ? 1 : 0
+  # Only issue when no valid cert exists on disk — avoids re-issuing (and
+  # avoids unknown-count on dependent resources when cert is already valid).
+  count = local.wildcard_tls_use_acme ? 1 : 0
 
   account_key_pem               = acme_registration.wildcard[0].account_key_pem
   common_name                   = local.wildcard_domain
@@ -140,10 +142,12 @@ resource "acme_certificate" "wildcard" {
 
 # Write wildcard cert files to disk
 resource "null_resource" "wildcard_tls_files" {
-  count = local.wildcard_tls_enabled && (
-    try(data.external.wildcard_tls_existing[0].result.valid, "false") != "true" ||
-    try(acme_certificate.wildcard[0].certificate_pem, null) != null
-  ) ? 1 : 0
+  # Count must only depend on plan-time-known values (not acme_certificate attrs)
+  # so destroy/plan work before the cert resource is applied.
+  count = local.wildcard_tls_enabled ? 1 : 0
+
+  # Ensure directory exists before writing
+  depends_on = [null_resource.artifacts_dirs]
 
   triggers = {
     ca_sha   = sha256(local.wildcard_tls_ca_pem)
@@ -336,7 +340,8 @@ resource "acme_certificate" "ingress" {
 }
 
 resource "null_resource" "ingress_tls_files" {
-  count = local.ingress_tls_enabled && (
+  # Skip when wildcard is enabled — ingress uses the wildcard cert instead
+  count = !local.wildcard_tls_enabled && local.ingress_tls_enabled && (
     local.ingress_tls_write_files
   ) ? 1 : 0
 
@@ -478,7 +483,7 @@ resource "null_resource" "msr4_tls_files" {
 # ── TLS: Computed locals ───────────────────────────────────────────────────
 locals {
   # ── Wildcard selection: when use_wildcard_cert=true, all services use the wildcard cert ──
-  # MKE3 paths (file-based for launchpad)
+  # MKE3 paths (file-based for launchpad) — paths point to wildcard cert files
   mke3_effective_tls_ca_path = local.wildcard_tls_enabled ? (
     "${local.wildcard_tls_dir}/ca.pem"
   ) : local.mke3_tls_ca_path
@@ -488,9 +493,8 @@ locals {
   mke3_effective_tls_key_path = local.wildcard_tls_enabled ? (
     "${local.wildcard_tls_dir}/key.pem"
   ) : local.mke3_tls_key_path
-  mke3_effective_tls_common_name = local.wildcard_tls_enabled ? (
-    local.wildcard_domain
-  ) : local.mke3_tls_common_name
+  # NOTE: common_name must stay as the real hostname (used as SAN/URL), NOT *.domain
+  mke3_effective_tls_common_name = local.mke3_tls_common_name
 
   # MSR2 PEMs (inline in launchpad msr section)
   msr2_effective_ca_pem = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : (
@@ -503,17 +507,39 @@ locals {
     local.msr_tls_enabled ? file(local.msr_tls_key_file) : ""
   )
 
-  # MKE4 PEMs (inline in mkectl template)
+  # MKE4 PEMs (inline in mkectl template) — domainName must stay as real hostname
   mke4_effective_tls_present = local.wildcard_tls_enabled || local.mke4_tls_present
-  mke4_effective_tls_common_name = local.wildcard_tls_enabled ? (
-    local.wildcard_domain
-  ) : local.mke4_tls_common_name
+  mke4_effective_tls_common_name = local.mke4_tls_common_name
   mke4_effective_tls_ca_pem = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.mke4_tls_ca_pem
   mke4_effective_tls_cert_pem = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.mke4_tls_cert_pem
   mke4_effective_tls_key_pem = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.mke4_tls_key_pem
 
   # MSR4 paths (file-based, checked by install_msr4.sh)
   msr4_effective_tls_dir = local.wildcard_tls_enabled ? local.wildcard_tls_dir : "${local.artifacts_dir}/tlscerts/msr4"
+
+  # Ingress TLS (when wildcard enabled, ingress uses wildcard cert)
+  ingress_effective_tls_enabled = local.wildcard_tls_enabled || local.ingress_tls_enabled
+  ingress_effective_tls_dir = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_dir
+  ) : local.ingress_tls_dir
+  ingress_effective_tls_ca_file = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_ca_file
+  ) : local.ingress_tls_ca_file
+  ingress_effective_tls_cert_file = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_cert_file
+  ) : local.ingress_tls_cert_file
+  ingress_effective_tls_key_file = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_key_file
+  ) : local.ingress_tls_key_file
+  ingress_effective_tls_ca_pem = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_ca_pem
+  ) : local.ingress_tls_ca_pem
+  ingress_effective_tls_cert_pem = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_cert_pem
+  ) : local.ingress_tls_cert_pem
+  ingress_effective_tls_key_pem = local.wildcard_tls_enabled ? (
+    local.wildcard_tls_key_pem
+  ) : local.ingress_tls_key_pem
 
   # MKE3 TLS
   mke3_tls = var.mke3_tls
@@ -541,14 +567,14 @@ locals {
   mke3_tls_key_path  = local.mke3_tls_enabled ? "./artifacts/tlscerts/mke3/${local.mke3_tls_common_name}/key.pem" : null
 
   mke3_tls_use_existing   = local.mke3_tls_wants_acme && try(data.external.mke3_tls_existing[0].result.valid == "true", false)
-  mke3_tls_use_acme       = local.mke3_tls_wants_acme && !local.mke3_tls_use_existing
+  mke3_tls_use_acme       = !local.wildcard_tls_enabled && local.mke3_tls_wants_acme && !local.mke3_tls_use_existing
   mke3_tls_ca_input_pem   = try(local.mke3_tls.ca_pem != null ? local.mke3_tls.ca_pem : "", "")
   mke3_tls_cert_input_pem = try(local.mke3_tls.cert_pem != null ? local.mke3_tls.cert_pem : "", "")
   mke3_tls_key_input_pem  = try(local.mke3_tls.key_pem != null ? local.mke3_tls.key_pem : "", "")
-  mke3_tls_ca_pem         = local.mke3_tls_use_existing ? (fileexists(local.mke3_tls_ca_file) ? file(local.mke3_tls_ca_file) : "") : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].issuer_pem, "") : local.mke3_tls_ca_input_pem
-  mke3_tls_cert_pem       = local.mke3_tls_use_existing ? file(local.mke3_tls_cert_file) : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].certificate_pem, "") : local.mke3_tls_cert_input_pem
-  mke3_tls_key_pem        = local.mke3_tls_use_existing ? file(local.mke3_tls_key_file) : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].private_key_pem, "") : local.mke3_tls_key_input_pem
-  mke3_tls_write_files = (
+  mke3_tls_ca_pem         = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.mke3_tls_use_existing ? (fileexists(local.mke3_tls_ca_file) ? file(local.mke3_tls_ca_file) : "") : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].issuer_pem, "") : local.mke3_tls_ca_input_pem
+  mke3_tls_cert_pem       = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.mke3_tls_use_existing ? file(local.mke3_tls_cert_file) : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].certificate_pem, "") : local.mke3_tls_cert_input_pem
+  mke3_tls_key_pem        = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.mke3_tls_use_existing ? file(local.mke3_tls_key_file) : local.mke3_tls_use_acme ? try(acme_certificate.mke3[0].private_key_pem, "") : local.mke3_tls_key_input_pem
+  mke3_tls_write_files = !local.wildcard_tls_enabled && (
     local.mke3_tls_use_acme ||
     (length(trimspace(local.mke3_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.mke3_tls_key_input_pem)) > 0)
@@ -575,20 +601,20 @@ locals {
   mke4_tls_key_file  = "${local.mke4_tls_dir}/key.pem"
 
   mke4_tls_use_existing   = local.mke4_tls_wants_acme && try(data.external.mke4_tls_existing[0].result.valid == "true", false)
-  mke4_tls_use_acme       = local.mke4_tls_wants_acme && !local.mke4_tls_use_existing
+  mke4_tls_use_acme       = !local.wildcard_tls_enabled && local.mke4_tls_wants_acme && !local.mke4_tls_use_existing
   mke4_tls_ca_input_pem   = try(local.mke4_tls.ca_pem != null ? local.mke4_tls.ca_pem : "", "")
   mke4_tls_cert_input_pem = try(local.mke4_tls.cert_pem != null ? local.mke4_tls.cert_pem : "", "")
   mke4_tls_key_input_pem  = try(local.mke4_tls.key_pem != null ? local.mke4_tls.key_pem : "", "")
-  mke4_tls_ca_pem         = local.mke4_tls_use_existing ? (fileexists(local.mke4_tls_ca_file) ? file(local.mke4_tls_ca_file) : "") : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].issuer_pem, "") : local.mke4_tls_ca_input_pem
-  mke4_tls_cert_pem       = local.mke4_tls_use_existing ? file(local.mke4_tls_cert_file) : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].certificate_pem, "") : local.mke4_tls_cert_input_pem
-  mke4_tls_key_pem        = local.mke4_tls_use_existing ? file(local.mke4_tls_key_file) : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].private_key_pem, "") : local.mke4_tls_key_input_pem
-  mke4_tls_present = local.mke4_tls_enabled && (
+  mke4_tls_ca_pem         = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.mke4_tls_use_existing ? (fileexists(local.mke4_tls_ca_file) ? file(local.mke4_tls_ca_file) : "") : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].issuer_pem, "") : local.mke4_tls_ca_input_pem
+  mke4_tls_cert_pem       = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.mke4_tls_use_existing ? file(local.mke4_tls_cert_file) : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].certificate_pem, "") : local.mke4_tls_cert_input_pem
+  mke4_tls_key_pem        = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.mke4_tls_use_existing ? file(local.mke4_tls_key_file) : local.mke4_tls_use_acme ? try(acme_certificate.mke4[0].private_key_pem, "") : local.mke4_tls_key_input_pem
+  mke4_tls_present = local.wildcard_tls_enabled || (local.mke4_tls_enabled && (
     local.mke4_tls_use_acme ||
     local.mke4_tls_use_existing ||
     (length(trimspace(local.mke4_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.mke4_tls_key_input_pem)) > 0)
-  )
-  mke4_tls_write_files = (
+  ))
+  mke4_tls_write_files = !local.wildcard_tls_enabled && (
     local.mke4_tls_use_acme ||
     (length(trimspace(local.mke4_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.mke4_tls_key_input_pem)) > 0)
@@ -615,14 +641,14 @@ locals {
   ingress_tls_key_file  = "${local.ingress_tls_dir}/key.pem"
 
   ingress_tls_use_existing   = local.ingress_tls_wants_acme && try(data.external.ingress_tls_existing[0].result.valid == "true", false)
-  ingress_tls_use_acme       = local.ingress_tls_wants_acme && !local.ingress_tls_use_existing
+  ingress_tls_use_acme       = !local.wildcard_tls_enabled && local.ingress_tls_wants_acme && !local.ingress_tls_use_existing
   ingress_tls_ca_input_pem   = try(local.ingress_tls.ca_pem != null ? local.ingress_tls.ca_pem : "", "")
   ingress_tls_cert_input_pem = try(local.ingress_tls.cert_pem != null ? local.ingress_tls.cert_pem : "", "")
   ingress_tls_key_input_pem  = try(local.ingress_tls.key_pem != null ? local.ingress_tls.key_pem : "", "")
-  ingress_tls_ca_pem         = local.ingress_tls_use_existing ? (fileexists(local.ingress_tls_ca_file) ? file(local.ingress_tls_ca_file) : "") : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].issuer_pem, "") : local.ingress_tls_ca_input_pem
-  ingress_tls_cert_pem       = local.ingress_tls_use_existing ? file(local.ingress_tls_cert_file) : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].certificate_pem, "") : local.ingress_tls_cert_input_pem
-  ingress_tls_key_pem        = local.ingress_tls_use_existing ? file(local.ingress_tls_key_file) : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].private_key_pem, "") : local.ingress_tls_key_input_pem
-  ingress_tls_write_files = (
+  ingress_tls_ca_pem         = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.ingress_tls_use_existing ? (fileexists(local.ingress_tls_ca_file) ? file(local.ingress_tls_ca_file) : "") : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].issuer_pem, "") : local.ingress_tls_ca_input_pem
+  ingress_tls_cert_pem       = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.ingress_tls_use_existing ? file(local.ingress_tls_cert_file) : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].certificate_pem, "") : local.ingress_tls_cert_input_pem
+  ingress_tls_key_pem        = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.ingress_tls_use_existing ? file(local.ingress_tls_key_file) : local.ingress_tls_use_acme ? try(acme_certificate.ingress[0].private_key_pem, "") : local.ingress_tls_key_input_pem
+  ingress_tls_write_files = !local.wildcard_tls_enabled && (
     local.ingress_tls_use_acme ||
     (length(trimspace(local.ingress_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.ingress_tls_key_input_pem)) > 0)
@@ -649,14 +675,14 @@ locals {
   msr_tls_key_file  = "${local.msr_tls_dir}/key.pem"
 
   msr_tls_use_existing   = local.msr_tls_wants_acme && try(data.external.msr_tls_existing[0].result.valid == "true", false)
-  msr_tls_use_acme       = local.msr_tls_wants_acme && !local.msr_tls_use_existing
+  msr_tls_use_acme       = !local.wildcard_tls_enabled && local.msr_tls_wants_acme && !local.msr_tls_use_existing
   msr_tls_ca_input_pem   = try(local.msr_tls.ca_pem != null ? local.msr_tls.ca_pem : "", "")
   msr_tls_cert_input_pem = try(local.msr_tls.cert_pem != null ? local.msr_tls.cert_pem : "", "")
   msr_tls_key_input_pem  = try(local.msr_tls.key_pem != null ? local.msr_tls.key_pem : "", "")
-  msr_tls_ca_pem         = local.msr_tls_use_existing ? (fileexists(local.msr_tls_ca_file) ? file(local.msr_tls_ca_file) : "") : local.msr_tls_use_acme ? try(acme_certificate.msr[0].issuer_pem, "") : local.msr_tls_ca_input_pem
-  msr_tls_cert_pem       = local.msr_tls_use_existing ? file(local.msr_tls_cert_file) : local.msr_tls_use_acme ? try(acme_certificate.msr[0].certificate_pem, "") : local.msr_tls_cert_input_pem
-  msr_tls_key_pem        = local.msr_tls_use_existing ? file(local.msr_tls_key_file) : local.msr_tls_use_acme ? try(acme_certificate.msr[0].private_key_pem, "") : local.msr_tls_key_input_pem
-  msr_tls_write_files = (
+  msr_tls_ca_pem         = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.msr_tls_use_existing ? (fileexists(local.msr_tls_ca_file) ? file(local.msr_tls_ca_file) : "") : local.msr_tls_use_acme ? try(acme_certificate.msr[0].issuer_pem, "") : local.msr_tls_ca_input_pem
+  msr_tls_cert_pem       = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.msr_tls_use_existing ? file(local.msr_tls_cert_file) : local.msr_tls_use_acme ? try(acme_certificate.msr[0].certificate_pem, "") : local.msr_tls_cert_input_pem
+  msr_tls_key_pem        = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.msr_tls_use_existing ? file(local.msr_tls_key_file) : local.msr_tls_use_acme ? try(acme_certificate.msr[0].private_key_pem, "") : local.msr_tls_key_input_pem
+  msr_tls_write_files = !local.wildcard_tls_enabled && (
     local.msr_tls_use_acme ||
     (length(trimspace(local.msr_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.msr_tls_key_input_pem)) > 0)
@@ -683,14 +709,14 @@ locals {
   msr4_tls_key_file  = "${local.msr4_tls_dir}/key.pem"
 
   msr4_tls_use_existing   = local.msr4_tls_wants_acme && try(data.external.msr4_tls_existing[0].result.valid == "true", false)
-  msr4_tls_use_acme       = local.msr4_tls_wants_acme && !local.msr4_tls_use_existing
+  msr4_tls_use_acme       = !local.wildcard_tls_enabled && local.msr4_tls_wants_acme && !local.msr4_tls_use_existing
   msr4_tls_ca_input_pem   = try(local.msr4_tls.ca_pem != null ? local.msr4_tls.ca_pem : "", "")
   msr4_tls_cert_input_pem = try(local.msr4_tls.cert_pem != null ? local.msr4_tls.cert_pem : "", "")
   msr4_tls_key_input_pem  = try(local.msr4_tls.key_pem != null ? local.msr4_tls.key_pem : "", "")
-  msr4_tls_ca_pem         = local.msr4_tls_use_existing ? (fileexists(local.msr4_tls_ca_file) ? file(local.msr4_tls_ca_file) : "") : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].issuer_pem, "") : local.msr4_tls_ca_input_pem
-  msr4_tls_cert_pem       = local.msr4_tls_use_existing ? file(local.msr4_tls_cert_file) : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].certificate_pem, "") : local.msr4_tls_cert_input_pem
-  msr4_tls_key_pem        = local.msr4_tls_use_existing ? file(local.msr4_tls_key_file) : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].private_key_pem, "") : local.msr4_tls_key_input_pem
-  msr4_tls_write_files = (
+  msr4_tls_ca_pem         = local.wildcard_tls_enabled ? local.wildcard_tls_ca_pem : local.msr4_tls_use_existing ? (fileexists(local.msr4_tls_ca_file) ? file(local.msr4_tls_ca_file) : "") : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].issuer_pem, "") : local.msr4_tls_ca_input_pem
+  msr4_tls_cert_pem       = local.wildcard_tls_enabled ? local.wildcard_tls_cert_pem : local.msr4_tls_use_existing ? file(local.msr4_tls_cert_file) : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].certificate_pem, "") : local.msr4_tls_cert_input_pem
+  msr4_tls_key_pem        = local.wildcard_tls_enabled ? local.wildcard_tls_key_pem : local.msr4_tls_use_existing ? file(local.msr4_tls_key_file) : local.msr4_tls_use_acme ? try(acme_certificate.msr4[0].private_key_pem, "") : local.msr4_tls_key_input_pem
+  msr4_tls_write_files = !local.wildcard_tls_enabled && (
     local.msr4_tls_use_acme ||
     (length(trimspace(local.msr4_tls_cert_input_pem)) > 0 &&
     length(trimspace(local.msr4_tls_key_input_pem)) > 0)
