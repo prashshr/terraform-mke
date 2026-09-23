@@ -179,9 +179,22 @@ locals {
     fileexists(local.wildcard_tls_ca_file) ? file(local.wildcard_tls_ca_file) : ""
   ) : local.wildcard_tls_use_acme ? try(acme_certificate.wildcard[0].issuer_pem, "") : ""
 
-  wildcard_tls_cert_pem = local.wildcard_tls_use_existing ? (
+  # Leaf cert as read from disk or ACME (may or may not already include issuer)
+  wildcard_tls_cert_body = local.wildcard_tls_use_existing ? (
     fileexists(local.wildcard_tls_cert_file) ? file(local.wildcard_tls_cert_file) : ""
   ) : local.wildcard_tls_use_acme ? try(acme_certificate.wildcard[0].certificate_pem, "") : ""
+
+  # Always expose a fullchain (leaf + intermediate) for serving.
+  # Browsers/OpenSSL need the LE intermediate (YR2) in the TLS handshake;
+  # certPath/server.pem alone is leaf-only and fails chain verification.
+  # Normalization is idempotent: if body already contains CA, leave as-is,
+  # so file() round-trip after write_tls_cert.sh converges (no plan drift).
+  wildcard_tls_cert_pem = (
+    local.wildcard_tls_cert_body == "" ? "" :
+    local.wildcard_tls_ca_pem == "" ? local.wildcard_tls_cert_body :
+    strcontains(local.wildcard_tls_cert_body, trimspace(local.wildcard_tls_ca_pem)) ? local.wildcard_tls_cert_body :
+    "${trimsuffix(trimspace(local.wildcard_tls_cert_body), "\n")}\n${trimspace(local.wildcard_tls_ca_pem)}\n"
+  )
 
   wildcard_tls_key_pem = local.wildcard_tls_use_existing ? (
     fileexists(local.wildcard_tls_key_file) ? file(local.wildcard_tls_key_file) : ""

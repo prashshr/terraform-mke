@@ -316,35 +316,63 @@ create_repo() {
     -o /dev/null -w '%{http_code}'
 }
 
+# Authenticate once before the push loops. Login failure is fatal: a silent
+# skip here previously reported "Done" with tags=0 when DTR served a leaf-only
+# cert that the Docker daemon would not trust (x509 unknown authority).
+docker_login_registry() {
+  local err
+  if err="$(docker login "${MSR2_URL#*://}" \
+        --username "${MSR2_ADMIN_USERNAME}" \
+        --password-stdin 2>&1 <<<"${MSR2_ADMIN_PASSWORD}")"; then
+    echo "Authenticated to registry ${MSR2_URL#*://} as ${MSR2_ADMIN_USERNAME}"
+    return 0
+  fi
+  echo "ERROR: docker login to ${MSR2_URL#*://} failed; cannot push image tags." >&2
+  echo "  ${err}" >&2
+  echo "  Hint: DTR must serve a fullchain cert (leaf + intermediate)." >&2
+  echo "  Check: openssl s_client -connect ${MSR2_URL#*://}:443 -servername ${MSR2_URL#*://} -showcerts | grep -c 'BEGIN CERTIFICATE'" >&2
+  exit 1
+}
+
 push_dummy_image() {
   local org="$1" repo="$2" tag_count="$3" base_img="$4"
   local target="${MSR2_URL#*://}/${org}/${repo}"
   local base_tag="${base_img##*:}"
-
-  if ! docker login "${MSR2_URL#*://}" \
-        --username "${MSR2_ADMIN_USERNAME}" \
-        --password "${MSR2_ADMIN_PASSWORD}" >/dev/null 2>&1; then
-    echo "  WARN: docker login to ${MSR2_URL#*://} failed; skipping image push for ${org}/${repo}" >&2
-    return 0
-  fi
+  local pushed=0 failed=0
 
   docker pull "${base_img}" >/dev/null 2>&1 || true
 
   local tag ref
   while IFS= read -r tag; do
     ref="${target}:${tag}"
-    docker tag "${base_img}" "${ref}" >/dev/null 2>&1
+    if ! docker tag "${base_img}" "${ref}" >/dev/null 2>&1; then
+      echo "    ERROR: failed to tag ${base_img} as ${ref}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
     PUSHED_LOCAL_REFS+=("${ref}")
     if docker push "${ref}" >/dev/null 2>&1; then
       echo "    docker push ${ref} (from ${base_img})"
+      pushed=$((pushed + 1))
     else
-      echo "    WARN: failed to push ${ref}" >&2
+      echo "    ERROR: failed to push ${ref}" >&2
+      failed=$((failed + 1))
     fi
   done < <(generate_tags "${base_tag}" "${tag_count}")
+
+  if (( failed > 0 )); then
+    echo "ERROR: ${failed} push(es) failed for ${org}/${repo} (${pushed} ok)." >&2
+    exit 1
+  fi
+  if (( pushed == 0 )); then
+    echo "ERROR: no tags pushed for ${org}/${repo}." >&2
+    exit 1
+  fi
 }
 
 # ---- main ------------------------------------------------------------------
 login
+docker_login_registry
 
 # Authenticate to MKE3 if SSO is enabled (needed for user/org creation)
 if [[ "${SSO_ENABLED}" == "true" ]]; then
