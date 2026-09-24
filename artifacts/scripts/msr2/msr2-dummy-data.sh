@@ -3,12 +3,13 @@
 # msr2-dummy-data.sh
 #
 # Populates a DTR-based Mirantis Secure Registry 2 (MSR2) instance with
-# dummy data for testing/demonstration:
-#   - USERS                 regular (non-admin) users
-#   - COUNT_ORG             organizations (project equivalent)
-#   - COUNT_TAGS_PER_REPO   tags pushed into one repository per org
-#   - COUNT_PRIVATE_REPO    private repositories per org
-#   - COUNT_PUBLIC_REPO     public repositories per org
+# dummy data for testing/demonstration. Counts come from config.env
+# (MSR2_DUMMY_* keys, default 3); exported USERS/COUNT_* still override.
+#   - USERS / MSR2_DUMMY_USERS              regular (non-admin) users
+#   - COUNT_ORG / MSR2_DUMMY_ORGS           organizations (project equivalent)
+#   - COUNT_TAGS_PER_REPO / MSR2_DUMMY_TAGS_PER_REPO
+#   - COUNT_PRIVATE_REPO / MSR2_DUMMY_PRIVATE_REPOS
+#   - COUNT_PUBLIC_REPO / MSR2_DUMMY_PUBLIC_REPOS
 #
 # Connection + auth are READ from an environment file (default:
 # artifacts/configs/msr2.env). Only the needed values are consumed:
@@ -47,12 +48,16 @@ cleanup_local_images() {
 
 trap cleanup_local_images EXIT
 
-# ---- tunable counts (override via environment) -----------------------------
-USERS="${USERS:-5}"
-COUNT_ORG="${COUNT_ORG:-5}"
-COUNT_TAGS_PER_REPO="${COUNT_TAGS_PER_REPO:-10}"
-COUNT_PRIVATE_REPO="${COUNT_PRIVATE_REPO:-2}"
-COUNT_PUBLIC_REPO="${COUNT_PUBLIC_REPO:-4}"
+# ---- tunable counts (exported env > config.env MSR2_DUMMY_* > default 3) ----
+if [[ -f "${ROOT_DIR}/config.env" ]]; then
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/config.env"
+fi
+USERS="${USERS:-${MSR2_DUMMY_USERS:-3}}"
+COUNT_ORG="${COUNT_ORG:-${MSR2_DUMMY_ORGS:-3}}"
+COUNT_TAGS_PER_REPO="${COUNT_TAGS_PER_REPO:-${MSR2_DUMMY_TAGS_PER_REPO:-3}}"
+COUNT_PRIVATE_REPO="${COUNT_PRIVATE_REPO:-${MSR2_DUMMY_PRIVATE_REPOS:-3}}"
+COUNT_PUBLIC_REPO="${COUNT_PUBLIC_REPO:-${MSR2_DUMMY_PUBLIC_REPOS:-3}}"
 
 # ---- connection defaults (overridable by env file, then by exported env) ---
 if [[ -f "${ENV_FILE}" ]]; then

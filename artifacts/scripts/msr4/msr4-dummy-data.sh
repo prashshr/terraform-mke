@@ -3,12 +3,13 @@
 # msr4-dummy-data.sh
 #
 # Populates a Harbor-based Mirantis Secure Registry 4 (MSR4) instance with
-# dummy data for testing/demonstration:
-#   - USERS                 regular (non-admin) users
-#   - COUNT_PROJECT         projects
-#   - COUNT_TAGS_PER_PROJECT tags pushed into one repository per project
-#   - COUNT_PRIVATE_REPO    private repositories per project
-#   - COUNT_PUBLIC_REPO     public repositories per project
+# dummy data for testing/demonstration. Counts come from config.env
+# (MSR4_DUMMY_* keys, default 3); exported USERS/COUNT_* still override.
+#   - USERS / MSR4_DUMMY_USERS              regular (non-admin) users
+#   - COUNT_PROJECT / MSR4_DUMMY_PROJECTS   projects
+#   - COUNT_TAGS_PER_PROJECT / MSR4_DUMMY_TAGS_PER_REPO
+#   - COUNT_PRIVATE_REPO / MSR4_DUMMY_PRIVATE_REPOS
+#   - COUNT_PUBLIC_REPO / MSR4_DUMMY_PUBLIC_REPOS
 #
 # Connection + auth are READ from an environment file (default:
 # artifacts/configs/msr4.env). Only the needed values are consumed:
@@ -48,12 +49,16 @@ cleanup_local_images() {
 # always remove local dummy images when the script ends
 trap cleanup_local_images EXIT
 
-# ---- tunable counts (override via environment) -----------------------------
-USERS="${USERS:-5}"
-COUNT_PROJECT="${COUNT_PROJECT:-5}"
-COUNT_TAGS_PER_PROJECT="${COUNT_TAGS_PER_PROJECT:-10}"
-COUNT_PRIVATE_REPO="${COUNT_PRIVATE_REPO:-2}"
-COUNT_PUBLIC_REPO="${COUNT_PUBLIC_REPO:-4}"
+# ---- tunable counts (exported env > config.env MSR4_DUMMY_* > default 3) ----
+if [[ -f "${ROOT_DIR}/config.env" ]]; then
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/config.env"
+fi
+USERS="${USERS:-${MSR4_DUMMY_USERS:-3}}"
+COUNT_PROJECT="${COUNT_PROJECT:-${MSR4_DUMMY_PROJECTS:-3}}"
+COUNT_TAGS_PER_PROJECT="${COUNT_TAGS_PER_PROJECT:-${MSR4_DUMMY_TAGS_PER_REPO:-3}}"
+COUNT_PRIVATE_REPO="${COUNT_PRIVATE_REPO:-${MSR4_DUMMY_PRIVATE_REPOS:-3}}"
+COUNT_PUBLIC_REPO="${COUNT_PUBLIC_REPO:-${MSR4_DUMMY_PUBLIC_REPOS:-3}}"
 
 # ---- connection defaults (overridable by env file, then by exported env) ---
 # Precedence: exported env var  >  env file  >  built-in default.
