@@ -123,6 +123,12 @@ This project supports multiple providers and cluster types. Every change must pr
 - Controls `render_mke3` / `render_mke4` locals
 - `mkestack.sh` reads from `terraform.tfvars`
 
+### Resource Tags and Labels
+- Root AWS resources use `Cluster`, `ManagedBy=terraform`, and `Project=terraform-ps` from `local.common_tags`.
+- AWS provider resources use configured `aws_settings.tags` plus module-managed `Cluster` and `pstesting=true`; each resource also sets `Name`.
+- Hetzner provider resources use configured `hetzner_settings.labels` plus the lowercase `cluster` label; applicable resources add `role` or `pool`.
+- Preserve the existing key capitalization and provider-specific conventions. Do not reuse module-managed keys for custom metadata.
+
 ### MKE4 Version-Specific Templates
 - v4.1: `ingressController.enabled: true`, nginx-based
 - v4.2: `spec.metallb.enabled`, `spec.gatewayMKEIngress`, `spec.envoyGateway`

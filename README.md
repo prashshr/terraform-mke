@@ -113,6 +113,38 @@ All configuration is in `config.env`. Key settings:
 | `ADMIN_PASSWORD` | `mkepassword` | MKE admin password |
 | `EXPIRY_DAYS` | `30` | Cluster auto-expiry in days |
 
+## Resource tags and labels
+
+The project uses provider-native metadata, keeping the existing key names and
+capitalization:
+
+| Resources | Required project metadata | Custom metadata |
+|-----------|---------------------------|----------------|
+| Root AWS resources, including airgap and NFS resources | `Cluster=<cluster_name>`, `ManagedBy=terraform`, `Project=terraform-ps` | Resource-specific `Name` and `Role` values |
+| AWS provider module resources | `Cluster=<cluster_name>`, `pstesting=true`; each resource also has a `Name` | Set `aws_settings.tags` |
+| Hetzner provider resources | `cluster=<cluster_name>` (lowercase); resources may also have a resource-specific `role` or server-pool `pool` label | Set `hetzner_settings.labels` or node-pool `labels` |
+
+For example, add custom values in `terraform.tfvars` without replacing the
+module-managed values:
+
+```hcl
+aws_settings = {
+  tags = {
+    CostCenter = "platform"
+  }
+}
+
+hetzner_settings = {
+  labels = {
+    owner = "platform"
+  }
+}
+```
+
+`Cluster`, `pstesting`, and `cluster` are set by the provider modules and should
+not be used for custom values. AWS tags and Hetzner labels are separate
+provider-specific conventions; keep their key casing as shown.
+
 ## Architecture
 
 - 1 manager node (control plane)
